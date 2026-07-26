@@ -854,3 +854,197 @@ input[type='checkbox']:checked::before {
     border-radius:18px;
   }
 }
+
+/* v0.1.10 More features */
+.moreSectionLabel{
+  margin:8px 4px -4px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.featurePage{
+  display:grid;
+  gap:14px;
+}
+.backToMore{
+  justify-self:start;
+  padding:8px 12px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  color:var(--muted);
+}
+.featureHint{
+  margin-top:-4px;
+  color:var(--muted);
+}
+.featureFormGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+.featureFormGrid .field:has(textarea),
+.featureFormGrid .field:nth-last-child(1){
+  grid-column:1/-1;
+}
+.featureFormGrid textarea{
+  resize:vertical;
+}
+.locationGroups,
+.recordList{
+  display:grid;
+  gap:14px;
+}
+.locationRoomCard,
+.recordCard,
+.developmentCard{
+  padding:18px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:#fff;
+  box-shadow:var(--shadow);
+}
+.locationRoomCard h3{
+  margin:0 0 12px;
+}
+.locationRows{
+  display:grid;
+  gap:10px;
+}
+.locationRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 0;
+  border-top:1px solid var(--line);
+}
+.locationRow:first-child{
+  border-top:0;
+}
+.locationRow > div{
+  display:grid;
+  gap:3px;
+}
+.locationRow span,
+.locationRow small{
+  color:var(--muted);
+}
+.medicalNotice{
+  padding:13px 15px;
+  border:1px solid #f3d7a1;
+  border-radius:15px;
+  background:#fff9e9;
+  color:#846221;
+  font-size:13px;
+}
+.recordHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.recordHead h3{
+  margin:4px 0 0;
+}
+.recordHead small{
+  color:var(--muted);
+}
+.recordSection{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+}
+.recordSection strong{
+  font-size:13px;
+}
+.recordSection p{
+  margin:6px 0 0;
+  white-space:pre-wrap;
+  color:var(--muted);
+  line-height:1.6;
+}
+.developmentFilter{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  padding:2px 0 6px;
+}
+.developmentFilter button{
+  flex:0 0 auto;
+  padding:8px 12px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:#fff;
+  color:var(--muted);
+}
+.developmentFilter button.active{
+  border-color:var(--mint);
+  background:var(--mint-soft);
+  color:var(--mint-strong);
+  font-weight:800;
+}
+.developmentTimeline{
+  position:relative;
+  display:grid;
+  gap:14px;
+  padding-left:22px;
+}
+.developmentTimeline::before{
+  content:"";
+  position:absolute;
+  left:7px;
+  top:8px;
+  bottom:8px;
+  width:2px;
+  background:var(--line);
+}
+.developmentRecord{
+  position:relative;
+}
+.timelineDot{
+  position:absolute;
+  left:-21px;
+  top:22px;
+  width:12px;
+  height:12px;
+  border:3px solid #fff;
+  border-radius:50%;
+  background:var(--mint);
+  box-shadow:0 0 0 2px var(--mint-soft);
+}
+.recordTags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:12px;
+}
+.recordTags span{
+  padding:5px 9px;
+  border-radius:999px;
+  background:var(--mint-soft);
+  color:var(--mint-strong);
+  font-size:11px;
+  font-weight:800;
+}
+.developmentCard p{
+  margin:12px 0 0;
+  white-space:pre-wrap;
+  color:var(--muted);
+  line-height:1.6;
+}
+@media(max-width:640px){
+  .featureFormGrid{
+    grid-template-columns:1fr;
+  }
+  .featureFormGrid .field{
+    grid-column:1;
+  }
+  .locationRoomCard,
+  .recordCard,
+  .developmentCard{
+    padding:15px;
+    border-radius:18px;
+  }
+}

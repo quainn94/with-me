@@ -43,6 +43,9 @@ const defaultState = {
   needs: [
     { id: 'n1', name: '아기 치약', purchased: false, stockQuantity: 1, stockUnit: '개', sortOrder: 1 },
   ],
+  houseLocations: [],
+  careNotes: [],
+  developmentRecords: [],
 }
 
 defaultState.meals.월 = {
@@ -99,6 +102,24 @@ export default function App() {
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [showStockForm, setShowStockForm] = useState(false)
   const [openStockCategories, setOpenStockCategories] = useState({})
+  const [houseLocationForm, setHouseLocationForm] = useState({ room: '', storage: '', detail: '' })
+  const [careNoteForm, setCareNoteForm] = useState({
+    title: '',
+    date: new Date().toISOString().slice(0, 10),
+    symptoms: '',
+    actions: '',
+    result: '',
+    hospitalGuide: '',
+  })
+  const [developmentForm, setDevelopmentForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    category: '대근육',
+    status: '처음 성공',
+    title: '',
+    correctedAge: '',
+    note: '',
+  })
+  const [developmentFilter, setDevelopmentFilter] = useState('전체')
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [cloudLoading, setCloudLoading] = useState(false)
@@ -255,6 +276,68 @@ export default function App() {
   }, [data.stock])
 
   const updateData = (patch) => setData((prev) => ({ ...prev, ...patch }))
+
+  const addHouseLocation = () => {
+    const room = houseLocationForm.room.trim()
+    const storage = houseLocationForm.storage.trim()
+    if (!room || !storage) return
+    updateData({
+      houseLocations: [
+        ...data.houseLocations,
+        {
+          id: crypto.randomUUID(),
+          room,
+          storage,
+          detail: houseLocationForm.detail.trim(),
+        },
+      ],
+    })
+    setHouseLocationForm({ room: '', storage: '', detail: '' })
+  }
+
+  const addCareNote = () => {
+    if (!careNoteForm.title.trim()) return
+    updateData({
+      careNotes: [
+        {
+          id: crypto.randomUUID(),
+          ...careNoteForm,
+          title: careNoteForm.title.trim(),
+        },
+        ...data.careNotes,
+      ],
+    })
+    setCareNoteForm({
+      title: '',
+      date: new Date().toISOString().slice(0, 10),
+      symptoms: '',
+      actions: '',
+      result: '',
+      hospitalGuide: '',
+    })
+  }
+
+  const addDevelopmentRecord = () => {
+    if (!developmentForm.title.trim()) return
+    updateData({
+      developmentRecords: [
+        {
+          id: crypto.randomUUID(),
+          ...developmentForm,
+          title: developmentForm.title.trim(),
+        },
+        ...data.developmentRecords,
+      ],
+    })
+    setDevelopmentForm({
+      date: new Date().toISOString().slice(0, 10),
+      category: '대근육',
+      status: '처음 성공',
+      title: '',
+      correctedAge: '',
+      note: '',
+    })
+  }
 
   const lowStock = useMemo(
     () => data.stock.filter((item) => Number(item.quantity) <= Number(item.threshold)),
@@ -1330,6 +1413,36 @@ export default function App() {
 
         {tab === 'more' && (
           <section className="morePage">
+            <div className="moreSectionLabel">생활</div>
+            <button type="button" className="moreMenuCard" onClick={() => setTab('houseMap')}>
+              <span className="moreMenuIcon">⌂</span>
+              <span className="moreMenuText">
+                <strong>집안 위치도</strong>
+                <small>방과 수납 위치를 한눈에 정리해요</small>
+              </span>
+              <span className="moreMenuArrow">›</span>
+            </button>
+
+            <div className="moreSectionLabel">육아</div>
+            <button type="button" className="moreMenuCard" onClick={() => setTab('careNotes')}>
+              <span className="moreMenuIcon">♡</span>
+              <span className="moreMenuText">
+                <strong>증상 대응 노트</strong>
+                <small>아팠을 때 증상과 대응 결과를 기록해요</small>
+              </span>
+              <span className="moreMenuArrow">›</span>
+            </button>
+
+            <button type="button" className="moreMenuCard" onClick={() => setTab('development')}>
+              <span className="moreMenuIcon">★</span>
+              <span className="moreMenuText">
+                <strong>발달 기록</strong>
+                <small>작은 변화와 처음 성공한 날을 남겨요</small>
+              </span>
+              <span className="moreMenuArrow">›</span>
+            </button>
+
+            <div className="moreSectionLabel">관리</div>
             <button type="button" className="moreMenuCard" onClick={() => setTab('need')}>
               <span className="moreMenuIcon">✓</span>
               <span className="moreMenuText">
@@ -1344,21 +1457,267 @@ export default function App() {
               <span className="moreMenuArrow">›</span>
             </button>
 
-            <button type="button" className="moreMenuCard disabled" disabled>
-              <span className="moreMenuIcon">⌂</span>
-              <span className="moreMenuText">
-                <strong>집안 지도</strong>
-                <small>보관 위치를 한눈에 보는 기능</small>
-              </span>
-              <span className="comingSoonBadge">준비 중</span>
-            </button>
-
             <section className="moreInfoCard">
               <div>
                 <strong>앱 버전</strong>
-                <span>v0.1.9</span>
+                <span>v0.1.10</span>
               </div>
               <button type="button" onClick={signOut}>로그아웃</button>
+            </section>
+          </section>
+        )}
+
+        {tab === 'houseMap' && (
+          <section className="featurePage">
+            <button className="backToMore" type="button" onClick={() => setTab('more')}>‹ 더보기</button>
+
+            <section className="pageCard">
+              <h2>위치 추가</h2>
+              <p className="featureHint">실제 라벨링이 끝난 위치부터 하나씩 등록하면 돼요.</p>
+              <div className="featureFormGrid">
+                <Field label="공간">
+                  <input
+                    value={houseLocationForm.room}
+                    onChange={(e) => setHouseLocationForm({ ...houseLocationForm, room: e.target.value })}
+                    placeholder="예: 현관, 주방"
+                  />
+                </Field>
+                <Field label="수납 위치">
+                  <input
+                    value={houseLocationForm.storage}
+                    onChange={(e) => setHouseLocationForm({ ...houseLocationForm, storage: e.target.value })}
+                    placeholder="예: 신발장 상단"
+                  />
+                </Field>
+                <Field label="보관 내용">
+                  <input
+                    value={houseLocationForm.detail}
+                    onChange={(e) => setHouseLocationForm({ ...houseLocationForm, detail: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && addHouseLocation()}
+                    placeholder="예: 청소 재고, 병원 서류"
+                  />
+                </Field>
+              </div>
+              <div className="formActions"><button onClick={addHouseLocation}>위치 추가</button></div>
+            </section>
+
+            <section className="locationGroups">
+              {Array.from(new Set(data.houseLocations.map((item) => item.room))).map((room) => (
+                <article className="locationRoomCard" key={room}>
+                  <h3>{room}</h3>
+                  <div className="locationRows">
+                    {data.houseLocations.filter((item) => item.room === room).map((item) => {
+                      const linkedStock = data.stock.filter((stockItem) =>
+                        (stockItem.storageLocation || '').includes(item.storage) ||
+                        item.storage.includes(stockItem.storageLocation || '__none__')
+                      )
+                      return (
+                        <div className="locationRow" key={item.id}>
+                          <div>
+                            <strong>{item.storage}</strong>
+                            <span>{item.detail || '보관 내용 미입력'}</span>
+                            {linkedStock.length > 0 && <small>연결된 재고 {linkedStock.length}개</small>}
+                          </div>
+                          <button className="delete" onClick={() => updateData({
+                            houseLocations: data.houseLocations.filter((x) => x.id !== item.id),
+                          })}>삭제</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </article>
+              ))}
+              {data.houseLocations.length === 0 && (
+                <Empty title="등록된 위치가 없어요" text="라벨링이 끝난 수납 위치부터 추가해보세요." />
+              )}
+            </section>
+          </section>
+        )}
+
+        {tab === 'careNotes' && (
+          <section className="featurePage">
+            <button className="backToMore" type="button" onClick={() => setTab('more')}>‹ 더보기</button>
+
+            <section className="medicalNotice">
+              개인 경험 기록이며 의료진의 진단이나 응급 판단을 대신하지 않아요.
+            </section>
+
+            <section className="pageCard">
+              <h2>증상 기록 추가</h2>
+              <div className="featureFormGrid">
+                <Field label="제목">
+                  <input
+                    value={careNoteForm.title}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, title: e.target.value })}
+                    placeholder="예: 가래 때문에 자주 깸"
+                  />
+                </Field>
+                <Field label="발생일">
+                  <input
+                    type="date"
+                    value={careNoteForm.date}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, date: e.target.value })}
+                  />
+                </Field>
+                <Field label="보였던 증상">
+                  <textarea
+                    rows="3"
+                    value={careNoteForm.symptoms}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, symptoms: e.target.value })}
+                    placeholder="기침할 때 놀라서 울음, 그르렁거림"
+                  />
+                </Field>
+                <Field label="해본 대응">
+                  <textarea
+                    rows="3"
+                    value={careNoteForm.actions}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, actions: e.target.value })}
+                    placeholder="흡인, 네뷸라이저, 자세 조절"
+                  />
+                </Field>
+                <Field label="결과">
+                  <textarea
+                    rows="2"
+                    value={careNoteForm.result}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, result: e.target.value })}
+                    placeholder="무엇이 도움이 됐는지"
+                  />
+                </Field>
+                <Field label="병원 안내·다음 진료 기준">
+                  <textarea
+                    rows="2"
+                    value={careNoteForm.hospitalGuide}
+                    onChange={(e) => setCareNoteForm({ ...careNoteForm, hospitalGuide: e.target.value })}
+                    placeholder="의료진에게 들은 내용만 기록"
+                  />
+                </Field>
+              </div>
+              <div className="formActions"><button onClick={addCareNote}>기록 저장</button></div>
+            </section>
+
+            <section className="recordList">
+              {data.careNotes.map((note) => (
+                <article className="recordCard" key={note.id}>
+                  <div className="recordHead">
+                    <div><small>{note.date}</small><h3>{note.title}</h3></div>
+                    <button className="delete" onClick={() => updateData({
+                      careNotes: data.careNotes.filter((x) => x.id !== note.id),
+                    })}>삭제</button>
+                  </div>
+                  {note.symptoms && <RecordSection label="보였던 증상" value={note.symptoms} />}
+                  {note.actions && <RecordSection label="해본 대응" value={note.actions} />}
+                  {note.result && <RecordSection label="결과" value={note.result} />}
+                  {note.hospitalGuide && <RecordSection label="병원 안내·다음 진료 기준" value={note.hospitalGuide} />}
+                </article>
+              ))}
+              {data.careNotes.length === 0 && (
+                <Empty title="아직 기록이 없어요" text="다음에 비슷한 상황이 왔을 때 도움이 되도록 남겨보세요." />
+              )}
+            </section>
+          </section>
+        )}
+
+        {tab === 'development' && (
+          <section className="featurePage">
+            <button className="backToMore" type="button" onClick={() => setTab('more')}>‹ 더보기</button>
+
+            <section className="pageCard">
+              <h2>발달 기록 추가</h2>
+              <div className="featureFormGrid">
+                <Field label="날짜">
+                  <input
+                    type="date"
+                    value={developmentForm.date}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, date: e.target.value })}
+                  />
+                </Field>
+                <Field label="영역">
+                  <select
+                    value={developmentForm.category}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, category: e.target.value })}
+                  >
+                    {['대근육', '소근육', '언어', '인지', '사회성', '식사 기술', '기타'].map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="상태">
+                  <select
+                    value={developmentForm.status}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, status: e.target.value })}
+                  >
+                    {['처음 성공', '요즘 자주 함', '사라짐', '다시 시작', '관찰'].map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="교정 월령">
+                  <input
+                    value={developmentForm.correctedAge}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, correctedAge: e.target.value })}
+                    placeholder="예: 교정 12개월"
+                  />
+                </Field>
+                <Field label="기록 제목">
+                  <input
+                    value={developmentForm.title}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, title: e.target.value })}
+                    placeholder="예: 블록 8개를 통에 넣음"
+                  />
+                </Field>
+                <Field label="상세 메모">
+                  <textarea
+                    rows="3"
+                    value={developmentForm.note}
+                    onChange={(e) => setDevelopmentForm({ ...developmentForm, note: e.target.value })}
+                    placeholder="상황, 힌트 여부, 반복 횟수 등을 기록"
+                  />
+                </Field>
+              </div>
+              <div className="formActions"><button onClick={addDevelopmentRecord}>기록 저장</button></div>
+            </section>
+
+            <div className="developmentFilter">
+              {['전체', '대근육', '소근육', '언어', '인지', '사회성', '식사 기술', '기타'].map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={developmentFilter === item ? 'active' : ''}
+                  onClick={() => setDevelopmentFilter(item)}
+                >{item}</button>
+              ))}
+            </div>
+
+            <section className="developmentTimeline">
+              {data.developmentRecords
+                .filter((item) => developmentFilter === '전체' || item.category === developmentFilter)
+                .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                .map((record) => (
+                  <article className="developmentRecord" key={record.id}>
+                    <div className="timelineDot" />
+                    <div className="developmentCard">
+                      <div className="recordHead">
+                        <div>
+                          <small>{record.date}{record.correctedAge ? ` · ${record.correctedAge}` : ''}</small>
+                          <h3>{record.title}</h3>
+                        </div>
+                        <button className="delete" onClick={() => updateData({
+                          developmentRecords: data.developmentRecords.filter((x) => x.id !== record.id),
+                        })}>삭제</button>
+                      </div>
+                      <div className="recordTags">
+                        <span>{record.category}</span>
+                        <span>{record.status}</span>
+                      </div>
+                      {record.note && <p>{record.note}</p>}
+                    </div>
+                  </article>
+                ))}
+              {data.developmentRecords.filter(
+                (item) => developmentFilter === '전체' || item.category === developmentFilter,
+              ).length === 0 && (
+                <Empty title="해당 기록이 없어요" text="작은 변화도 날짜와 함께 남겨보세요." />
+              )}
             </section>
           </section>
         )}
@@ -1439,7 +1798,7 @@ export default function App() {
         <Nav
           label="더보기"
           icon="•••"
-          active={tab === 'more' || tab === 'need'}
+          active={['more', 'need', 'houseMap', 'careNotes', 'development'].includes(tab)}
           badge={data.needs.filter((item) => !item.purchased).length}
           onClick={() => setTab('more')}
         />
@@ -1462,6 +1821,9 @@ function normalizeState(value) {
       noExpiry: !item.expiryDate,
       ...item,
     })),
+    houseLocations: Array.isArray(parsed.houseLocations) ? parsed.houseLocations : [],
+    careNotes: Array.isArray(parsed.careNotes) ? parsed.careNotes : [],
+    developmentRecords: Array.isArray(parsed.developmentRecords) ? parsed.developmentRecords : [],
   }
 }
 
@@ -1536,6 +1898,15 @@ function Field({ label, children }) {
   return <label className="field"><span>{label}</span>{children}</label>
 }
 
+function RecordSection({ label, value }) {
+  return (
+    <section className="recordSection">
+      <strong>{label}</strong>
+      <p>{value}</p>
+    </section>
+  )
+}
+
 function Nav({ label, icon, active, badge = 0, onClick }) {
   return (
     <button className={active ? 'navButton active' : 'navButton'} onClick={onClick}>
@@ -1549,7 +1920,7 @@ function Nav({ label, icon, active, badge = 0, onClick }) {
 }
 
 function titleFor(tab) {
-  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need', more: '더보기' }[tab]
+  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need', more: '더보기', houseMap: '집안 위치도', careNotes: '증상 대응 노트', development: '발달 기록' }[tab]
 }
 
 function subtitleFor(tab) {
@@ -1559,6 +1930,9 @@ function subtitleFor(tab) {
     meals: '이번 주 식단과 메뉴 반응을 한눈에.',
     stock: '부족 기준과 유통기한을 함께 관리해요.',
     need: '사야 할 것과 구매 완료를 나눠봐요.',
-    more: '보조 기능과 설정을 한곳에 모았어요.',
+    more: '생활과 육아 기록을 한곳에 모았어요.',
+    houseMap: '방과 수납 위치를 차근차근 정리해요.',
+    careNotes: '우리 아이에게 있었던 증상과 대응을 남겨요.',
+    development: '작은 변화도 날짜와 함께 기록해요.',
   }[tab]
 }
