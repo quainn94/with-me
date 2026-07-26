@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const STORAGE_KEY = 'with-me-v0.4'
+const STORAGE_KEY = 'with-me-v0.0.5'
 const days = ['월', '화', '수', '목', '금', '토', '일']
-const mealTypes = ['아침', '점심', '간식', '저녁']
+const mealTypes = ['아침', '점심', '간식 A', '간식 B', '저녁']
 const categories = ['음식', '육아', '생활', '화장품', '반려동물']
 const reactionOptions = [
   { value: 'love', label: '아주 잘 먹음', icon: '😍' },
@@ -46,7 +46,8 @@ const defaultState = {
 defaultState.meals.월 = {
   아침: '순두부 계란찜',
   점심: '닭안심 야채볶음',
-  간식: '바나나',
+  '간식 A': '바나나',
+  '간식 B': '',
   저녁: '소고기 덮밥',
 }
 
@@ -110,7 +111,7 @@ export default function App() {
 
   const expiringStock = useMemo(() => data.stock.filter(isExpiring), [data.stock])
   const todayTodos = data.todos.filter((item) => item.bucket === 'today')
-  const todayPreview = todayTodos.filter((item) => !item.done).slice(0, 4)
+  const todayPreview = todayTodos.slice(0, 3)
   const todayMeals = data.meals.월
 
   const addTodo = () => {
@@ -197,7 +198,7 @@ export default function App() {
     const nextMeals = structuredClone(data.meals)
     let applied = 0
 
-    rows.slice(0, 4).forEach((row, rowIndex) => {
+    rows.slice(0, 5).forEach((row, rowIndex) => {
       const type = mealTypes[rowIndex]
       if (!type) return
 
@@ -211,7 +212,7 @@ export default function App() {
     })
 
     updateData({ meals: nextMeals })
-    setPasteMessage(applied ? '표를 식단에 반영했어요.' : '4행 × 7열 형태의 표가 필요해요.')
+    setPasteMessage(applied ? '표를 식단에 반영했어요.' : '5행 × 7열 형태의 표가 필요해요.')
   }
 
   const saveStock = () => {
@@ -311,11 +312,25 @@ export default function App() {
               {todayPreview.length ? (
                 <div className="list">
                   {todayPreview.map((item) => (
-                    <div className="row" key={item.id}>
-                      <span className="dot" />
+                    <label
+                      className={item.done ? 'row homeTodoRow done' : 'row homeTodoRow'}
+                      key={item.id}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={() =>
+                          updateData({
+                            todos: data.todos.map((todo) =>
+                              todo.id === item.id ? { ...todo, done: !todo.done } : todo,
+                            ),
+                          })
+                        }
+                      />
                       <span>{item.title}</span>
                       {item.important && <b className="badge yellow">중요</b>}
-                    </div>
+                    </label>
                   ))}
                 </div>
               ) : <Empty title="오늘은 무엇을 할까요?" text="첫 번째 할 일을 추가해보세요." />}
@@ -518,7 +533,7 @@ export default function App() {
               <>
                 <section className="pageCard pasteCard">
                   <h3>표 붙여넣기</h3>
-                  <p>구글 독스·시트에서 4행 × 7열 표를 복사해 붙여넣으세요. 행 순서는 아침, 점심, 간식, 저녁입니다.</p>
+                  <p>구글 독스·시트에서 5행 × 7열 표를 복사해 붙여넣으세요. 행 순서는 아침, 점심, 간식 A, 간식 B, 저녁입니다.</p>
                   <textarea
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
@@ -677,31 +692,45 @@ export default function App() {
               </div>
             </section>
 
-            <section className="stockList">
-              {data.stock.map((item) => {
-                const low = Number(item.quantity) <= Number(item.threshold)
-                const expiring = isExpiring(item)
-                return (
-                  <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
-                    <div className="stockTop">
-                      <div><h3>{item.name}</h3><p>{item.category}</p></div>
-                      <div className="badgeGroup">
-                        {low && <span className="badge coral">부족</span>}
-                        {expiring && <span className="badge purple">기한 임박</span>}
-                      </div>
+            <section className="stockCategoryList">
+              {Array.from(new Set([...categories, ...data.stock.map((item) => item.category)]))
+                .filter((category) => data.stock.some((item) => item.category === category))
+                .map((category) => (
+                  <section className="stockCategory" key={category}>
+                    <div className="stockCategoryHead">
+                      <h3>{category}</h3>
+                      <span>{data.stock.filter((item) => item.category === category).length}개</span>
                     </div>
-                    <div className="stockSummary">
-                      <b>{item.quantity}{item.unit}</b>
-                      <span>부족 기준 {item.threshold}{item.unit}</span>
-                      <span>{item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
+                    <div className="stockList">
+                      {data.stock
+                        .filter((item) => item.category === category)
+                        .map((item) => {
+                          const low = Number(item.quantity) <= Number(item.threshold)
+                          const expiring = isExpiring(item)
+                          return (
+                            <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
+                              <div className="stockTop">
+                                <div><h3>{item.name}</h3></div>
+                                <div className="badgeGroup">
+                                  {low && <span className="badge coral">부족</span>}
+                                  {expiring && <span className="badge purple">기한 임박</span>}
+                                </div>
+                              </div>
+                              <div className="stockSummary">
+                                <b>{item.quantity}{item.unit}</b>
+                                <span>부족 기준 {item.threshold}{item.unit}</span>
+                                <span>{item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
+                              </div>
+                              <div className="cardActions">
+                                <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
+                                <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
+                              </div>
+                            </article>
+                          )
+                        })}
                     </div>
-                    <div className="cardActions">
-                      <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
-                      <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
-                    </div>
-                  </article>
-                )
-              })}
+                  </section>
+                ))}
             </section>
           </section>
         )}

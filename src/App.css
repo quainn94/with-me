@@ -92,3 +92,63 @@
   .routineHead{align-items:flex-start;flex-direction:column}.routineName{max-width:none}.routineHeadActions{width:100%;justify-content:flex-end}
   .needRow{grid-template-columns:auto 1fr}.needButtons{grid-column:2;justify-content:flex-start}
 }
+
+
+/* v0.0.5 */
+.homeTodoRow {
+  cursor: default;
+}
+
+.homeTodoRow input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--mint-dark);
+  flex: 0 0 auto;
+}
+
+.homeTodoRow > span {
+  flex: 1;
+}
+
+.homeTodoRow.done > span {
+  color: #a6aba8;
+  text-decoration: line-through;
+}
+
+.stockCategoryList {
+  display: grid;
+  gap: 18px;
+}
+
+.stockCategory {
+  display: grid;
+  gap: 10px;
+}
+
+.stockCategoryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.stockCategoryHead h3 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.stockCategoryHead span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mealGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 620px) {
+  .mealGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
