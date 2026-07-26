@@ -421,3 +421,53 @@ input[type='checkbox']:checked::before {
 .syncStatus { color: var(--muted); font-size: 11px; font-weight: 700; }
 .syncStatus.error { color: #c34d4d; }
 .logoutButton { padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; font-size: 12px; font-weight: 700; }
+
+
+/* v0.1.1 */
+.homeTodoSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--mint-light);
+}
+.homeTodoSummary span {
+  color: #557069;
+  font-size: 13px;
+  font-weight: 700;
+}
+.homeTodoSummary strong {
+  color: var(--mint-dark);
+  font-size: 18px;
+}
+.todoMoveButtons {
+  display: flex;
+  gap: 4px;
+}
+.todoMoveButtons button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  color: var(--mint-dark);
+  background: var(--mint-light);
+  font-size: 17px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.todoMoveButtons button:disabled {
+  opacity: .28;
+  cursor: default;
+}
+@media (min-width: 761px) {
+  .todoMoveButtons { display: none; }
+}
+@media (max-width: 760px) {
+  .dragHandle { display: none; }
+  .task { align-items: center; }
+  .taskTitle { min-width: calc(100% - 104px); }
+  .todoMoveButtons { margin-left: auto; }
+}

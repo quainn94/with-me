@@ -256,6 +256,13 @@ export default function App() {
   const expiringStock = useMemo(() => data.stock.filter(isExpiring), [data.stock])
   const todayTodos = data.todos.filter((item) => item.bucket === 'today')
   const todayPreview = todayTodos.slice(0, 3)
+  const completedTodayCount = todayTodos.filter((item) => item.done).length
+  const todayProgress = todayTodos.length ? Math.round((completedTodayCount / todayTodos.length) * 100) : 0
+  const todayLabel = new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(new Date())
   const todayMeals = data.meals.월
 
   const addTodo = () => {
@@ -282,6 +289,19 @@ export default function App() {
     let index = 0
     updateData({
       todos: data.todos.map((item) => item.bucket === todoMode ? reordered[index++] : item),
+    })
+  }
+
+  const moveTodo = (todoId, direction) => {
+    const current = data.todos.filter((item) => item.bucket === todoMode)
+    const index = current.findIndex((item) => item.id === todoId)
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return
+    const reordered = [...current]
+    ;[reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]]
+    let bucketIndex = 0
+    updateData({
+      todos: data.todos.map((item) => item.bucket === todoMode ? reordered[bucketIndex++] : item),
     })
   }
 
@@ -570,7 +590,7 @@ export default function App() {
           <div className="headerAccount">
             <div>
               <p className="eyebrow">WITH ME</p>
-              <span className={syncStatus === '저장 실패' ? 'syncStatus error' : 'syncStatus'}>{syncStatus}</span>
+              {syncStatus === '저장 실패' && <span className="syncStatus error">저장 실패</span>}
             </div>
             <button className="logoutButton" onClick={signOut}>로그아웃</button>
           </div>
@@ -581,6 +601,10 @@ export default function App() {
         {tab === 'home' && (
           <section className="stack">
             <Card title="Todo" kicker="TODAY" onClick={() => setTab('todo')}>
+              <div className="homeTodoSummary">
+                <span>{todayLabel}</span>
+                <strong>{todayProgress}%</strong>
+              </div>
               {todayPreview.length ? (
                 <div className="list">
                   {todayPreview.map((item) => (
@@ -658,7 +682,7 @@ export default function App() {
             {todoMode !== 'library' ? (
               <>
                 <div className="toolbar">
-                  <span className="dragHelp">⋮⋮ 끌어서 순서 변경</span>
+                  <span className="dragHelp">PC는 드래그 · 휴대폰은 ↑↓ 버튼으로 순서 변경</span>
                   <label className="switchLabel">
                     <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} />
                     완료 숨기기
@@ -672,7 +696,7 @@ export default function App() {
                   {data.todos
                     .filter((item) => item.bucket === todoMode)
                     .filter((item) => !(hideDone && item.done))
-                    .map((item) => (
+                    .map((item, visibleIndex, visibleItems) => (
                       <div
                         className={`${item.done ? 'task done' : 'task'} ${draggedTodoId === item.id ? 'dragging' : ''}`}
                         key={item.id}
@@ -704,6 +728,20 @@ export default function App() {
                           })}
                         >★</button>
                         <span className="taskTitle">{item.title}</span>
+                        <div className="todoMoveButtons" aria-label="순서 변경">
+                          <button
+                            type="button"
+                            onClick={() => moveTodo(item.id, 'up')}
+                            disabled={data.todos.filter((todo) => todo.bucket === todoMode).findIndex((todo) => todo.id === item.id) === 0}
+                            aria-label={`${item.title} 위로 이동`}
+                          >↑</button>
+                          <button
+                            type="button"
+                            onClick={() => moveTodo(item.id, 'down')}
+                            disabled={data.todos.filter((todo) => todo.bucket === todoMode).findIndex((todo) => todo.id === item.id) === data.todos.filter((todo) => todo.bucket === todoMode).length - 1}
+                            aria-label={`${item.title} 아래로 이동`}
+                          >↓</button>
+                        </div>
                         <button
                           className="smallButton"
                           onClick={() => updateData({
