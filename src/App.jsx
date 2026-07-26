@@ -265,44 +265,97 @@ export default function App() {
   }).format(new Date())
   const todayMeals = data.meals.월
 
+  const visibleBucketTodos = (bucket = todoMode) =>
+    data.todos
+      .filter((item) => item.bucket === bucket)
+      .filter((item) => !(hideDone && item.done))
+
+  const placeTodoByDefault = (todos, todo) => {
+    const bucketItems = todos.filter((item) => item.bucket === todo.bucket && item.id !== todo.id)
+    const otherItems = todos.filter((item) => item.bucket !== todo.bucket)
+    const importantOpen = bucketItems.filter((item) => !item.done && item.important)
+    const regularOpen = bucketItems.filter((item) => !item.done && !item.important)
+    const completed = bucketItems.filter((item) => item.done)
+
+    let arranged
+    if (todo.done) {
+      arranged = [...importantOpen, ...regularOpen, ...completed, todo]
+    } else if (todo.important) {
+      arranged = [todo, ...importantOpen, ...regularOpen, ...completed]
+    } else {
+      arranged = [...importantOpen, todo, ...regularOpen, ...completed]
+    }
+
+    const firstBucketIndex = todos.findIndex((item) => item.bucket === todo.bucket)
+    if (firstBucketIndex < 0) return [...todos, todo]
+    const result = [...otherItems]
+    result.splice(firstBucketIndex, 0, ...arranged)
+    return result
+  }
+
   const addTodo = () => {
     const title = todoDraft.trim()
     if (!title) return
-    updateData({
-      todos: [
-        ...data.todos,
-        { id: crypto.randomUUID(), title, bucket: todoMode === 'next' ? 'next' : 'today', done: false, important: false },
-      ],
-    })
+    const newTodo = {
+      id: crypto.randomUUID(),
+      title,
+      bucket: todoMode === 'next' ? 'next' : 'today',
+      done: false,
+      important: false,
+      createdAt: Date.now(),
+    }
+    updateData({ todos: placeTodoByDefault(data.todos, newTodo) })
     setTodoDraft('')
   }
 
   const reorderTodos = (sourceId, targetId) => {
     if (!sourceId || sourceId === targetId) return
-    const current = data.todos.filter((item) => item.bucket === todoMode)
-    const sourceIndex = current.findIndex((item) => item.id === sourceId)
-    const targetIndex = current.findIndex((item) => item.id === targetId)
+    const visible = visibleBucketTodos()
+    const sourceIndex = visible.findIndex((item) => item.id === sourceId)
+    const targetIndex = visible.findIndex((item) => item.id === targetId)
     if (sourceIndex < 0 || targetIndex < 0) return
-    const reordered = [...current]
-    const [moved] = reordered.splice(sourceIndex, 1)
-    reordered.splice(targetIndex, 0, moved)
-    let index = 0
+    const reorderedVisible = [...visible]
+    const [moved] = reorderedVisible.splice(sourceIndex, 1)
+    reorderedVisible.splice(targetIndex, 0, moved)
+    let visibleIndex = 0
     updateData({
-      todos: data.todos.map((item) => item.bucket === todoMode ? reordered[index++] : item),
+      todos: data.todos.map((item) =>
+        item.bucket === todoMode && !(hideDone && item.done)
+          ? reorderedVisible[visibleIndex++]
+          : item,
+      ),
     })
   }
 
   const moveTodo = (todoId, direction) => {
-    const current = data.todos.filter((item) => item.bucket === todoMode)
-    const index = current.findIndex((item) => item.id === todoId)
+    const visible = visibleBucketTodos()
+    const index = visible.findIndex((item) => item.id === todoId)
     const targetIndex = direction === 'up' ? index - 1 : index + 1
-    if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return
-    const reordered = [...current]
-    ;[reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]]
-    let bucketIndex = 0
+    if (index < 0 || targetIndex < 0 || targetIndex >= visible.length) return
+    const reorderedVisible = [...visible]
+    ;[reorderedVisible[index], reorderedVisible[targetIndex]] = [reorderedVisible[targetIndex], reorderedVisible[index]]
+    let visibleIndex = 0
     updateData({
-      todos: data.todos.map((item) => item.bucket === todoMode ? reordered[bucketIndex++] : item),
+      todos: data.todos.map((item) =>
+        item.bucket === todoMode && !(hideDone && item.done)
+          ? reorderedVisible[visibleIndex++]
+          : item,
+      ),
     })
+  }
+
+  const toggleTodoDone = (todoId) => {
+    const target = data.todos.find((item) => item.id === todoId)
+    if (!target) return
+    const changed = { ...target, done: !target.done }
+    updateData({ todos: placeTodoByDefault(data.todos, changed) })
+  }
+
+  const toggleTodoImportant = (todoId) => {
+    const target = data.todos.find((item) => item.id === todoId)
+    if (!target) return
+    const changed = { ...target, important: !target.important }
+    updateData({ todos: placeTodoByDefault(data.todos, changed) })
   }
 
   const addRoutineGroup = () => {
@@ -717,28 +770,24 @@ export default function App() {
                         <input
                           type="checkbox"
                           checked={item.done}
-                          onChange={() => updateData({
-                            todos: data.todos.map((todo) => todo.id === item.id ? { ...todo, done: !todo.done } : todo),
-                          })}
+                          onChange={() => toggleTodoDone(item.id)}
                         />
                         <button
                           className={item.important ? 'star active' : 'star'}
-                          onClick={() => updateData({
-                            todos: data.todos.map((todo) => todo.id === item.id ? { ...todo, important: !todo.important } : todo),
-                          })}
+                          onClick={() => toggleTodoImportant(item.id)}
                         >★</button>
                         <span className="taskTitle">{item.title}</span>
                         <div className="todoMoveButtons" aria-label="순서 변경">
                           <button
                             type="button"
                             onClick={() => moveTodo(item.id, 'up')}
-                            disabled={data.todos.filter((todo) => todo.bucket === todoMode).findIndex((todo) => todo.id === item.id) === 0}
+                            disabled={visibleItems.findIndex((todo) => todo.id === item.id) === 0}
                             aria-label={`${item.title} 위로 이동`}
                           >↑</button>
                           <button
                             type="button"
                             onClick={() => moveTodo(item.id, 'down')}
-                            disabled={data.todos.filter((todo) => todo.bucket === todoMode).findIndex((todo) => todo.id === item.id) === data.todos.filter((todo) => todo.bucket === todoMode).length - 1}
+                            disabled={visibleItems.findIndex((todo) => todo.id === item.id) === visibleItems.length - 1}
                             aria-label={`${item.title} 아래로 이동`}
                           >↓</button>
                         </div>
@@ -1274,12 +1323,30 @@ function normalizeState(value) {
     stockCategories: parsed.stockCategories?.length
       ? parsed.stockCategories
       : Array.from(new Set([...defaultCategories, ...(parsed.stock || []).map((item) => item.category).filter(Boolean)])),
+    todos: normalizeTodos(parsed.todos || defaultState.todos),
     stock: (parsed.stock || defaultState.stock).map((item) => ({
       storageLocation: '',
       noExpiry: !item.expiryDate,
       ...item,
     })),
   }
+}
+
+
+function normalizeTodos(items) {
+  const prepared = items.map((item, index) => ({
+    createdAt: Date.now() - (items.length - index),
+    ...item,
+  }))
+  const bucketOrder = [...new Set(prepared.map((item) => item.bucket))]
+  return bucketOrder.flatMap((bucket) => {
+    const bucketItems = prepared.filter((item) => item.bucket === bucket)
+    return [
+      ...bucketItems.filter((item) => !item.done && item.important),
+      ...bucketItems.filter((item) => !item.done && !item.important),
+      ...bucketItems.filter((item) => item.done),
+    ]
+  })
 }
 
 function blankStockForm() {
