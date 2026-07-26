@@ -16,9 +16,9 @@ const reactionOptions = [
 
 const defaultState = {
   todos: [
-    { id: 't1', title: '이유식 용기 정리', bucket: 'today', done: false, important: true },
-    { id: 't2', title: '세탁기 돌리기', bucket: 'today', done: false, important: false },
-    { id: 't3', title: '병원 서류 정리', bucket: 'next', done: false, important: false },
+    { id: 't1', title: '이유식 용기 정리', bucket: 'today', done: false, important: true, inProgress: true },
+    { id: 't2', title: '세탁기 돌리기', bucket: 'today', done: false, important: false, inProgress: false },
+    { id: 't3', title: '병원 서류 정리', bucket: 'next', done: false, important: false, inProgress: false },
   ],
   routineGroups: [
     {
@@ -273,17 +273,20 @@ export default function App() {
   const placeTodoByDefault = (todos, todo) => {
     const bucketItems = todos.filter((item) => item.bucket === todo.bucket && item.id !== todo.id)
     const otherItems = todos.filter((item) => item.bucket !== todo.bucket)
-    const importantOpen = bucketItems.filter((item) => !item.done && item.important)
-    const regularOpen = bucketItems.filter((item) => !item.done && !item.important)
+    const progressingOpen = bucketItems.filter((item) => !item.done && item.inProgress)
+    const importantOpen = bucketItems.filter((item) => !item.done && !item.inProgress && item.important)
+    const regularOpen = bucketItems.filter((item) => !item.done && !item.inProgress && !item.important)
     const completed = bucketItems.filter((item) => item.done)
 
     let arranged
     if (todo.done) {
-      arranged = [...importantOpen, ...regularOpen, ...completed, todo]
+      arranged = [...progressingOpen, ...importantOpen, ...regularOpen, ...completed, todo]
+    } else if (todo.inProgress) {
+      arranged = [todo, ...progressingOpen, ...importantOpen, ...regularOpen, ...completed]
     } else if (todo.important) {
-      arranged = [todo, ...importantOpen, ...regularOpen, ...completed]
+      arranged = [...progressingOpen, todo, ...importantOpen, ...regularOpen, ...completed]
     } else {
-      arranged = [...importantOpen, todo, ...regularOpen, ...completed]
+      arranged = [...progressingOpen, ...importantOpen, todo, ...regularOpen, ...completed]
     }
 
     const firstBucketIndex = todos.findIndex((item) => item.bucket === todo.bucket)
@@ -302,6 +305,7 @@ export default function App() {
       bucket: todoMode === 'next' ? 'next' : 'today',
       done: false,
       important: false,
+      inProgress: false,
       createdAt: Date.now(),
     }
     updateData({ todos: placeTodoByDefault(data.todos, newTodo) })
@@ -347,7 +351,7 @@ export default function App() {
   const toggleTodoDone = (todoId) => {
     const target = data.todos.find((item) => item.id === todoId)
     if (!target) return
-    const changed = { ...target, done: !target.done }
+    const changed = { ...target, done: !target.done, inProgress: target.done ? target.inProgress : false }
     updateData({ todos: placeTodoByDefault(data.todos, changed) })
   }
 
@@ -355,6 +359,17 @@ export default function App() {
     const target = data.todos.find((item) => item.id === todoId)
     if (!target) return
     const changed = { ...target, important: !target.important }
+    updateData({ todos: placeTodoByDefault(data.todos, changed) })
+  }
+
+  const toggleTodoProgress = (todoId) => {
+    const target = data.todos.find((item) => item.id === todoId)
+    if (!target) return
+    const changed = {
+      ...target,
+      inProgress: !target.inProgress,
+      done: target.inProgress ? target.done : false,
+    }
     updateData({ todos: placeTodoByDefault(data.todos, changed) })
   }
 
@@ -678,6 +693,7 @@ export default function App() {
                         }
                       />
                       <span>{item.title}</span>
+                      {item.inProgress && <b className="badge progressBadge"><span className="statusDot" />진행중</b>}
                       {item.important && <b className="badge yellow">중요</b>}
                     </label>
                   ))}
@@ -751,7 +767,7 @@ export default function App() {
                     .filter((item) => !(hideDone && item.done))
                     .map((item, visibleIndex, visibleItems) => (
                       <div
-                        className={`${item.done ? 'task done' : 'task'} ${draggedTodoId === item.id ? 'dragging' : ''}`}
+                        className={`${item.done ? 'task done' : 'task'} ${item.inProgress ? 'inProgress' : ''} ${draggedTodoId === item.id ? 'dragging' : ''}`}
                         key={item.id}
                         draggable
                         onDragStart={(e) => {
@@ -772,6 +788,13 @@ export default function App() {
                           checked={item.done}
                           onChange={() => toggleTodoDone(item.id)}
                         />
+                        <button
+                          type="button"
+                          className={item.inProgress ? 'progressToggle active' : 'progressToggle'}
+                          onClick={() => toggleTodoProgress(item.id)}
+                          aria-pressed={Boolean(item.inProgress)}
+                          aria-label={`${item.title} 진행중 상태 ${item.inProgress ? '해제' : '설정'}`}
+                        ><span className="statusDot" />진행중</button>
                         <button
                           className={item.important ? 'star active' : 'star'}
                           onClick={() => toggleTodoImportant(item.id)}
@@ -1336,14 +1359,16 @@ function normalizeState(value) {
 function normalizeTodos(items) {
   const prepared = items.map((item, index) => ({
     createdAt: Date.now() - (items.length - index),
+    inProgress: false,
     ...item,
   }))
   const bucketOrder = [...new Set(prepared.map((item) => item.bucket))]
   return bucketOrder.flatMap((bucket) => {
     const bucketItems = prepared.filter((item) => item.bucket === bucket)
     return [
-      ...bucketItems.filter((item) => !item.done && item.important),
-      ...bucketItems.filter((item) => !item.done && !item.important),
+      ...bucketItems.filter((item) => !item.done && item.inProgress),
+      ...bucketItems.filter((item) => !item.done && !item.inProgress && item.important),
+      ...bucketItems.filter((item) => !item.done && !item.inProgress && !item.important),
       ...bucketItems.filter((item) => item.done),
     ]
   })
