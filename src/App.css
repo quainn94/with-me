@@ -543,3 +543,15 @@ input[type='checkbox']:checked::before {
     margin-left: auto;
   }
 }
+
+/* v0.1.4 */
+.thresholdInfo{
+  display:inline-flex;
+  flex-direction:column;
+  gap:2px;
+  line-height:1.2;
+}
+.thresholdInfo strong{
+  color:var(--ink);
+  font-size:13px;
+}
