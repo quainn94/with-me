@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const STORAGE_KEY = 'with-me-v0.0.5'
+const STORAGE_KEY = 'with-me-v0.0.6'
 const days = ['월', '화', '수', '목', '금', '토', '일']
-const mealTypes = ['아침', '점심', '간식 A', '간식 B', '저녁']
+const mealTypes = ['아침', '간식 A', '점심', '간식 B', '저녁']
 const categories = ['음식', '육아', '생활', '화장품', '반려동물']
 const reactionOptions = [
   { value: 'love', label: '아주 잘 먹음', icon: '😍' },
@@ -533,7 +533,7 @@ export default function App() {
               <>
                 <section className="pageCard pasteCard">
                   <h3>표 붙여넣기</h3>
-                  <p>구글 독스·시트에서 5행 × 7열 표를 복사해 붙여넣으세요. 행 순서는 아침, 점심, 간식 A, 간식 B, 저녁입니다.</p>
+                  <p>구글 독스·시트에서 5행 × 7열 표를 복사해 붙여넣으세요. 행 순서는 아침, 간식 A, 점심, 간식 B, 저녁입니다.</p>
                   <textarea
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
@@ -843,7 +843,12 @@ function Empty({ title, text }) {
 }
 
 function Mini({ label, value }) {
-  return <div className="mini"><span>{label}</span><b>{value || '—'}</b></div>
+  return (
+    <div className="mini">
+      <strong>{label}</strong>
+      <span className="miniValue">{value || '—'}</span>
+    </div>
+  )
 }
 
 function Field({ label, children }) {

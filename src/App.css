@@ -152,3 +152,34 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+
+/* v0.0.6 typography and home meals */
+.header h1,
+.card h2,
+.stockCard h3,
+.pageCard h2,
+.pageCard h3,
+.stockCategoryHead h3,
+.reviewBody h3 {
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-weight: 750;
+}
+
+.mini strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mini .miniValue {
+  display: block;
+  overflow: hidden;
+  color: #4f5752;
+  font-size: 13px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
