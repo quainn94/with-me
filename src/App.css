@@ -398,3 +398,26 @@ input[type='checkbox']:checked::before {
 .expiryCheckField {
   align-self: end;
 }
+
+
+/* v0.1.0 Supabase login and sync */
+.authShell { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 15% 10%, rgba(198,238,224,.65), transparent 34%), radial-gradient(circle at 90% 18%, rgba(255,238,171,.6), transparent 30%), #f7faf8; }
+.authCard { width: min(100%, 430px); padding: 30px; border: 1px solid var(--line); border-radius: 26px; background: rgba(255,255,255,.96); box-shadow: 0 18px 55px rgba(52,78,67,.12); }
+.authCard h1 { margin: 6px 0 8px; font-size: clamp(28px,8vw,38px); }
+.authDescription { margin: 0 0 24px; color: var(--muted); line-height: 1.55; }
+.authField { display: grid; gap: 8px; margin-top: 15px; }
+.authField span { font-size: 13px; font-weight: 800; }
+.authField input { width: 100%; padding: 14px 15px; border: 1px solid var(--line); border-radius: 14px; background: #fff; font: inherit; outline: none; }
+.authField input:focus { border-color: var(--mint-dark); box-shadow: 0 0 0 3px rgba(120,196,168,.16); }
+.authSubmit { width: 100%; margin-top: 20px; padding: 14px; border-radius: 14px; font-weight: 900; }
+.authSubmit:disabled { opacity: .6; }
+.authError { margin: 13px 0 0; color: #c34d4d; font-size: 13px; font-weight: 700; }
+.authLoadingCard { display: grid; justify-items: center; gap: 14px; text-align: center; }
+.authLoadingCard p { margin: 0; color: var(--muted); }
+.authSpinner { width: 34px; height: 34px; border: 3px solid #e4eee9; border-top-color: var(--mint-dark); border-radius: 50%; animation: auth-spin .8s linear infinite; }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+.headerAccount { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.headerAccount .eyebrow { margin-bottom: 3px; }
+.syncStatus { color: var(--muted); font-size: 11px; font-weight: 700; }
+.syncStatus.error { color: #c34d4d; }
+.logoutButton { padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #fff; font-size: 12px; font-weight: 700; }

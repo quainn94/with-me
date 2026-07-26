@@ -70,24 +70,7 @@ function loadState() {
     if (!saved) return defaultState
 
     const parsed = JSON.parse(saved)
-    return {
-      ...defaultState,
-      ...parsed,
-      stockCategories:
-        parsed.stockCategories?.length
-          ? parsed.stockCategories
-          : Array.from(
-              new Set([
-                ...defaultCategories,
-                ...(parsed.stock || []).map((item) => item.category).filter(Boolean),
-              ]),
-            ),
-      stock: (parsed.stock || defaultState.stock).map((item) => ({
-        storageLocation: '',
-        noExpiry: !item.expiryDate,
-        ...item,
-      })),
-    }
+    return normalizeState(parsed)
   } catch {
     return defaultState
   }
@@ -115,27 +98,135 @@ export default function App() {
   const [categoryDraft, setCategoryDraft] = useState('')
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [showStockForm, setShowStockForm] = useState(false)
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [cloudLoading, setCloudLoading] = useState(false)
+  const [cloudReady, setCloudReady] = useState(false)
+  const [householdId, setHouseholdId] = useState(null)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [loginError, setLoginError] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [syncStatus, setSyncStatus] = useState('')
+
+
+  useEffect(() => {
+    let mounted = true
+
+    supabase.auth.getSession().then(({ data: authData }) => {
+      if (!mounted) return
+      setSession(authData.session)
+      setAuthLoading(false)
+    })
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setAuthLoading(false)
+      if (!nextSession) {
+        setHouseholdId(null)
+        setCloudReady(false)
+        setSyncStatus('')
+      }
+    })
+
+    return () => {
+      mounted = false
+      subscription.subscription.unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }, [data])
 
   useEffect(() => {
-  const testConnection = async () => {
-    const { error } = await supabase
-      .from('app_data')
-      .select('household_id')
-      .limit(1)
+    if (!session?.user) return
+    let cancelled = false
 
-    if (error) {
-      console.error('Supabase 연결 실패:', error)
-    } else {
-      console.log('Supabase 연결 성공')
+    const loadCloudData = async () => {
+      setCloudLoading(true)
+      setCloudReady(false)
+      setSyncStatus('불러오는 중')
+
+      const { data: household, error: householdError } = await supabase
+        .from('households')
+        .select('id')
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (householdError || !household) {
+        console.error('가족 데이터 조회 실패:', householdError)
+        setLoginError('우리 집 데이터 공간을 찾지 못했어요.')
+        setCloudLoading(false)
+        setSyncStatus('연결 오류')
+        return
+      }
+
+      const { data: cloudRow, error: cloudError } = await supabase
+        .from('app_data')
+        .select('data')
+        .eq('household_id', household.id)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (cloudError) {
+        console.error('앱 데이터 조회 실패:', cloudError)
+        setLoginError('Supabase 데이터를 불러오지 못했어요.')
+        setCloudLoading(false)
+        setSyncStatus('연결 오류')
+        return
+      }
+
+      const cloudData = cloudRow?.data
+      const hasCloudData = cloudData && typeof cloudData === 'object' && !Array.isArray(cloudData) && Object.keys(cloudData).length > 0
+
+      if (hasCloudData) {
+        setData(normalizeState(cloudData))
+      } else {
+        const localData = normalizeState(loadState())
+        const { error: uploadError } = await supabase
+          .from('app_data')
+          .upsert({ household_id: household.id, data: localData, updated_at: new Date().toISOString() }, { onConflict: 'household_id' })
+
+        if (cancelled) return
+        if (uploadError) {
+          console.error('기존 데이터 이전 실패:', uploadError)
+          setLoginError('기존 데이터를 Supabase로 옮기지 못했어요.')
+          setCloudLoading(false)
+          setSyncStatus('이전 실패')
+          return
+        }
+        setData(localData)
+      }
+
+      setHouseholdId(household.id)
+      setCloudReady(true)
+      setCloudLoading(false)
+      setSyncStatus('저장됨')
     }
-  }
 
-  testConnection()
-}, [])
+    loadCloudData()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  useEffect(() => {
+    if (!cloudReady || !householdId) return
+    setSyncStatus('저장 중')
+    const timer = window.setTimeout(async () => {
+      const { error } = await supabase
+        .from('app_data')
+        .update({ data, updated_at: new Date().toISOString() })
+        .eq('household_id', householdId)
+
+      if (error) {
+        console.error('Supabase 저장 실패:', error)
+        setSyncStatus('저장 실패')
+      } else {
+        setSyncStatus('저장됨')
+      }
+    }, 600)
+    return () => window.clearTimeout(timer)
+  }, [data, cloudReady, householdId])
 
   useEffect(() => {
     setData((prev) => {
@@ -266,6 +357,22 @@ export default function App() {
 
     updateData({ meals: nextMeals })
     setPasteMessage(applied ? '표를 식단에 반영했어요.' : '5행 × 7열 형태의 표가 필요해요.')
+  }
+
+  const signIn = async (event) => {
+    event.preventDefault()
+    setLoginError('')
+    setLoginBusy(true)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginForm.email.trim(),
+      password: loginForm.password,
+    })
+    if (error) setLoginError('이메일 또는 비밀번호를 확인해 주세요.')
+    setLoginBusy(false)
+  }
+
+  const signOut = async () => {
+    await supabase.auth.signOut()
   }
 
   const addStockCategory = () => {
@@ -412,11 +519,61 @@ export default function App() {
     }))
   }
 
+  if (authLoading) {
+    return (
+      <div className="authShell">
+        <div className="authCard authLoadingCard">
+          <span className="authSpinner" />
+          <p>With Me를 준비하고 있어요.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <div className="authShell">
+        <form className="authCard" onSubmit={signIn}>
+          <p className="eyebrow">WITH ME</p>
+          <h1>우리 집에 로그인</h1>
+          <p className="authDescription">Supabase에 저장된 내 생활 데이터를 불러와요.</p>
+          <label className="authField">
+            <span>이메일</span>
+            <input type="email" autoComplete="email" value={loginForm.email} onChange={(event) => setLoginForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="이메일 주소" required />
+          </label>
+          <label className="authField">
+            <span>비밀번호</span>
+            <input type="password" autoComplete="current-password" value={loginForm.password} onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="비밀번호" required />
+          </label>
+          {loginError && <p className="authError">{loginError}</p>}
+          <button className="authSubmit" type="submit" disabled={loginBusy}>{loginBusy ? '로그인 중…' : '로그인'}</button>
+        </form>
+      </div>
+    )
+  }
+
+  if (cloudLoading || !cloudReady) {
+    return (
+      <div className="authShell">
+        <div className="authCard authLoadingCard">
+          <span className="authSpinner" />
+          <p>우리 집 데이터를 불러오고 있어요.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <main className="content">
         <header className="header">
-          <p className="eyebrow">WITH ME</p>
+          <div className="headerAccount">
+            <div>
+              <p className="eyebrow">WITH ME</p>
+              <span className={syncStatus === '저장 실패' ? 'syncStatus error' : 'syncStatus'}>{syncStatus}</span>
+            </div>
+            <button className="logoutButton" onClick={signOut}>로그아웃</button>
+          </div>
           <h1>{titleFor(tab)}</h1>
           <p className="sub">{subtitleFor(tab)}</p>
         </header>
@@ -1069,6 +1226,22 @@ export default function App() {
       </nav>
     </div>
   )
+}
+
+function normalizeState(value) {
+  const parsed = value && typeof value === 'object' ? value : {}
+  return {
+    ...defaultState,
+    ...parsed,
+    stockCategories: parsed.stockCategories?.length
+      ? parsed.stockCategories
+      : Array.from(new Set([...defaultCategories, ...(parsed.stock || []).map((item) => item.category).filter(Boolean)])),
+    stock: (parsed.stock || defaultState.stock).map((item) => ({
+      storageLocation: '',
+      noExpiry: !item.expiryDate,
+      ...item,
+    })),
+  }
 }
 
 function blankStockForm() {
