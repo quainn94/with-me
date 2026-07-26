@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from './supabaseClient'
 import './App.css'
 
 const STORAGE_KEY = 'with-me-data'
@@ -118,6 +119,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }, [data])
+
+  useEffect(() => {
+  const testConnection = async () => {
+    const { error } = await supabase
+      .from('app_data')
+      .select('household_id')
+      .limit(1)
+
+    if (error) {
+      console.error('Supabase 연결 실패:', error)
+    } else {
+      console.log('Supabase 연결 성공')
+    }
+  }
+
+  testConnection()
+}, [])
 
   useEffect(() => {
     setData((prev) => {
