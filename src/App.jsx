@@ -528,6 +528,16 @@ export default function App() {
     updateData({ stockCategories: reordered })
   }
 
+  const adjustStockQuantity = (id, delta) => {
+    updateData({
+      stock: data.stock.map((item) =>
+        item.id === id
+          ? { ...item, quantity: Math.max(0, Number(item.quantity || 0) + delta) }
+          : item
+      ),
+    })
+  }
+
   const saveStock = () => {
     const name = stockForm.name.trim()
     if (!name) return
@@ -701,7 +711,7 @@ export default function App() {
                         }
                       />
                       <span>{item.title}</span>
-                      {item.inProgress && <b className="badge progressBadge"><span className="statusDot" />진행중</b>}
+                      {!item.done && item.inProgress && <b className="badge progressBadge"><span className="statusDot" />진행중</b>}
                       {item.important && <b className="badge yellow">중요</b>}
                     </label>
                   ))}
@@ -1250,14 +1260,25 @@ export default function App() {
                                   {expiring && <span className="badge purple">기한 임박</span>}
                                 </div>
                               </div>
-                              <div className="stockSummary">
-                                <b>{item.quantity}{item.unit}</b>
-                                <span className="thresholdInfo">
+                              <div className="stockTable" role="group" aria-label={`${item.name} 재고 정보`}>
+                                <div className="stockTableLabels">
+                                  <span>현재 수량</span>
                                   <span>부족 기준</span>
+                                  <span>보관 위치</span>
+                                  <span>유통기한</span>
+                                </div>
+                                <div className="stockTableValues">
+                                  <div className="stockQuantityQuick">
+                                    <strong>{item.quantity}{item.unit}</strong>
+                                    <div className="quantityQuickButtons">
+                                      <button type="button" onClick={() => adjustStockQuantity(item.id, 1)} aria-label={`${item.name} 수량 1 증가`}>▲</button>
+                                      <button type="button" onClick={() => adjustStockQuantity(item.id, -1)} disabled={Number(item.quantity) <= 0} aria-label={`${item.name} 수량 1 감소`}>▼</button>
+                                    </div>
+                                  </div>
                                   <strong>{item.threshold}{item.unit}</strong>
-                                </span>
-                                <span>{item.storageLocation ? `보관 ${item.storageLocation}` : '보관 위치 미설정'}</span>
-                                <span>{item.noExpiry ? '유통기한 없음' : item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
+                                  <strong>{item.storageLocation || '미설정'}</strong>
+                                  <strong>{item.noExpiry ? '없음' : item.expiryDate || '미설정'}</strong>
+                                </div>
                               </div>
                               <div className="cardActions">
                                 <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
