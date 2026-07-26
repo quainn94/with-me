@@ -107,6 +107,8 @@ export default function App() {
   const [editingStock, setEditingStock] = useState(null)
   const [stockForm, setStockForm] = useState(blankStockForm())
   const [categoryDraft, setCategoryDraft] = useState('')
+  const [showCategoryManager, setShowCategoryManager] = useState(false)
+  const [showStockForm, setShowStockForm] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -753,15 +755,22 @@ export default function App() {
 
         {tab === 'stock' && (
           <section>
-            <section className="pageCard categoryManager">
-              <div className="categoryManagerHead">
+            <section className="pageCard collapsibleCard categoryManager">
+              <button
+                className="collapseHeader"
+                onClick={() => setShowCategoryManager((prev) => !prev)}
+                aria-expanded={showCategoryManager}
+              >
                 <div>
                   <h2>카테고리 관리</h2>
-                  <p>추가·이름 변경·순서 변경을 앱에서 직접 할 수 있어요.</p>
+                  <p>추가·이름 변경·삭제·순서 변경</p>
                 </div>
-              </div>
+                <span className={showCategoryManager ? 'collapseIcon open' : 'collapseIcon'}>⌄</span>
+              </button>
 
-              <div className="addRow categoryAddRow">
+              {showCategoryManager && (
+                <div className="collapseBody">
+                  <div className="addRow categoryAddRow">
                 <input
                   value={categoryDraft}
                   onChange={(e) => setCategoryDraft(e.target.value)}
@@ -771,48 +780,63 @@ export default function App() {
                 <button onClick={addStockCategory}>추가</button>
               </div>
 
-              <div className="categoryRows">
-                {data.stockCategories.map((category, index) => (
-                  <div className="categoryRow" key={category}>
-                    <input
-                      defaultValue={category}
-                      key={category}
-                      onBlur={(e) => renameStockCategory(category, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur()
-                      }}
-                    />
-                    <div className="categoryButtons">
-                      <button
-                        className="categoryMove"
-                        disabled={index === 0}
-                        onClick={() => moveStockCategory(category, 'up')}
-                        aria-label="위로"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        className="categoryMove"
-                        disabled={index === data.stockCategories.length - 1}
-                        onClick={() => moveStockCategory(category, 'down')}
-                        aria-label="아래로"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        className="delete"
-                        onClick={() => deleteStockCategory(category)}
-                      >
-                        삭제
-                      </button>
-                    </div>
+                  <div className="categoryRows">
+                    {data.stockCategories.map((category, index) => (
+                      <div className="categoryRow" key={category}>
+                        <input
+                          defaultValue={category}
+                          key={category}
+                          onBlur={(e) => renameStockCategory(category, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur()
+                          }}
+                        />
+                        <div className="categoryButtons">
+                          <button
+                            className="categoryMove"
+                            disabled={index === 0}
+                            onClick={() => moveStockCategory(category, 'up')}
+                            aria-label="위로"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            className="categoryMove"
+                            disabled={index === data.stockCategories.length - 1}
+                            onClick={() => moveStockCategory(category, 'down')}
+                            aria-label="아래로"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            className="delete"
+                            onClick={() => deleteStockCategory(category)}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </section>
 
-            <section className="pageCard stockForm">
-              <h2>{editingStock ? '재고 수정' : '재고 추가'}</h2>
+            <section className="pageCard collapsibleCard stockForm">
+              <button
+                className="collapseHeader"
+                onClick={() => setShowStockForm((prev) => !prev)}
+                aria-expanded={showStockForm}
+              >
+                <div>
+                  <h2>{editingStock ? '재고 수정' : '재고 추가'}</h2>
+                  <p>{editingStock ? '선택한 품목 정보를 수정해요.' : '새 품목을 재고에 등록해요.'}</p>
+                </div>
+                <span className={showStockForm ? 'collapseIcon open' : 'collapseIcon'}>⌄</span>
+              </button>
+
+              {showStockForm && (
+                <div className="collapseBody">
               <div className="formGrid">
                 <Field label="품목명"><input value={stockForm.name} onChange={(e) => setStockForm({ ...stockForm, name: e.target.value })} /></Field>
                 <Field label="카테고리">
@@ -830,10 +854,24 @@ export default function App() {
                   부족하면 Need에 자동 추가
                 </label>
               </div>
-              <div className="formActions">
-                {editingStock && <button className="secondary" onClick={() => { setEditingStock(null); setStockForm(blankStockForm()) }}>취소</button>}
-                <button onClick={saveStock}>{editingStock ? '수정 저장' : '재고 추가'}</button>
-              </div>
+                  <div className="formActions">
+                    {editingStock && (
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          setEditingStock(null)
+                          setStockForm(blankStockForm())
+                        }}
+                      >
+                        취소
+                      </button>
+                    )}
+                    <button onClick={saveStock}>
+                      {editingStock ? '수정 저장' : '재고 추가'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="stockCategoryList">
@@ -866,7 +904,7 @@ export default function App() {
                                 <span>{item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
                               </div>
                               <div className="cardActions">
-                                <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
+                                <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
                                 <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
                               </div>
                             </article>

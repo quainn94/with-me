@@ -296,3 +296,54 @@ input[type='checkbox']:checked::before {
     justify-content: flex-end;
   }
 }
+
+
+/* v0.0.8 collapsible stock sections */
+.collapsibleCard {
+  overflow: hidden;
+}
+
+.collapseHeader {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.collapseHeader h2 {
+  margin: 0;
+}
+
+.collapseHeader p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.collapseIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--mint-dark);
+  background: var(--mint-light);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.collapseIcon.open {
+  transform: rotate(180deg);
+}
+
+.collapseBody {
+  padding-top: 16px;
+}
