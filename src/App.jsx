@@ -98,8 +98,6 @@ export default function App() {
   const [categoryDraft, setCategoryDraft] = useState('')
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [showStockForm, setShowStockForm] = useState(false)
-  const [selectedStockLocation, setSelectedStockLocation] = useState('전체')
-  const [openStockCategories, setOpenStockCategories] = useState({})
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [cloudLoading, setCloudLoading] = useState(false)
@@ -671,50 +669,6 @@ export default function App() {
     )
   }
 
-  const stockLocations = useMemo(() => {
-    const locations = data.stock
-      .map((item) => item.storageLocation?.trim() || '미설정')
-      .filter(Boolean)
-    return ['전체', ...Array.from(new Set(locations))]
-  }, [data.stock])
-
-  const visibleStock = useMemo(() => {
-    if (selectedStockLocation === '전체') return data.stock
-    return data.stock.filter(
-      (item) => (item.storageLocation?.trim() || '미설정') === selectedStockLocation,
-    )
-  }, [data.stock, selectedStockLocation])
-
-  const visibleStockCategories = useMemo(
-    () => Array.from(new Set([
-      ...data.stockCategories,
-      ...visibleStock.map((item) => item.category),
-    ])).filter((category) => visibleStock.some((item) => item.category === category)),
-    [data.stockCategories, visibleStock],
-  )
-
-  const stockLocationSummary = (location) => {
-    const items = location === '전체'
-      ? data.stock
-      : data.stock.filter(
-          (item) => (item.storageLocation?.trim() || '미설정') === location,
-        )
-    return {
-      total: items.length,
-      low: items.filter(
-        (item) => Number(item.quantity) <= Number(item.threshold),
-      ).length,
-      expiring: items.filter(isExpiring).length,
-    }
-  }
-
-  const toggleStockCategory = (category) => {
-    setOpenStockCategories((prev) => ({
-      ...prev,
-      [category]: !prev[category],
-    }))
-  }
-
   return (
     <div className="app">
       <main className="content">
@@ -1282,124 +1236,60 @@ export default function App() {
               </div>
             </section>
 
-            <section className="stockLocationPanel" aria-label="보관 위치별 재고">
-              <div className="stockLocationPanelHead">
-                <div>
-                  <span className="eyebrow">STORAGE</span>
-                  <h3>위치별 재고</h3>
-                </div>
-                {selectedStockLocation !== '전체' && (
-                  <button
-                    type="button"
-                    className="locationResetButton"
-                    onClick={() => setSelectedStockLocation('전체')}
-                  >
-                    전체 보기
-                  </button>
-                )}
-              </div>
-              <div className="stockLocationScroller">
-                {stockLocations.map((location) => {
-                  const summary = stockLocationSummary(location)
-                  return (
-                    <button
-                      type="button"
-                      key={location}
-                      className={selectedStockLocation === location ? 'stockLocationCard active' : 'stockLocationCard'}
-                      onClick={() => setSelectedStockLocation(location)}
-                    >
-                      <strong>{location}</strong>
-                      <span>{summary.total}개</span>
-                      <small>
-                        {summary.low > 0 ? `부족 ${summary.low}` : '부족 없음'}
-                        {summary.expiring > 0 ? ` · 임박 ${summary.expiring}` : ''}
-                      </small>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-
             <section className="stockCategoryList">
-              {visibleStockCategories.length === 0 && (
-                <div className="emptyStockState">이 위치에 등록된 재고가 없어요.</div>
-              )}
-
-              {visibleStockCategories.map((category) => {
-                const categoryItems = visibleStock.filter((item) => item.category === category)
-                const lowCount = categoryItems.filter(
-                  (item) => Number(item.quantity) <= Number(item.threshold),
-                ).length
-                const expiringCount = categoryItems.filter(isExpiring).length
-                const isOpen = Boolean(openStockCategories[category])
-
-                return (
-                  <section className={isOpen ? 'stockCategory open' : 'stockCategory'} key={category}>
-                    <button
-                      type="button"
-                      className="stockCategoryHead"
-                      onClick={() => toggleStockCategory(category)}
-                      aria-expanded={isOpen}
-                    >
-                      <div className="stockCategoryTitle">
-                        <h3>{category}</h3>
-                        <span>
-                          전체 {categoryItems.length}
-                          {lowCount > 0 ? ` · 부족 ${lowCount}` : ''}
-                          {expiringCount > 0 ? ` · 임박 ${expiringCount}` : ''}
-                        </span>
-                      </div>
-                      <span className="stockCategoryChevron" aria-hidden="true">⌄</span>
-                    </button>
-
-                    <div className="stockCategoryBody">
-                      <div className="stockCategoryBodyInner">
-                        <div className="stockList">
-                          {categoryItems.map((item) => {
-                            const low = Number(item.quantity) <= Number(item.threshold)
-                            const expiring = isExpiring(item)
-                            return (
-                              <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
-                                <div className="stockTop">
-                                  <div><h3>{item.name}</h3></div>
-                                  <div className="badgeGroup">
-                                    {low && <span className="badge coral">부족</span>}
-                                    {expiring && <span className="badge purple">기한 임박</span>}
-                                  </div>
+              {Array.from(new Set([...data.stockCategories, ...data.stock.map((item) => item.category)]))
+                .filter((category) => data.stock.some((item) => item.category === category))
+                .map((category) => (
+                  <section className="stockCategory" key={category}>
+                    <div className="stockCategoryHead">
+                      <h3>{category}</h3>
+                      <span>{data.stock.filter((item) => item.category === category).length}개</span>
+                    </div>
+                    <div className="stockList">
+                      {data.stock
+                        .filter((item) => item.category === category)
+                        .map((item) => {
+                          const low = Number(item.quantity) <= Number(item.threshold)
+                          const expiring = isExpiring(item)
+                          return (
+                            <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
+                              <div className="stockTop">
+                                <div><h3>{item.name}</h3></div>
+                                <div className="badgeGroup">
+                                  {low && <span className="badge coral">부족</span>}
+                                  {expiring && <span className="badge purple">기한 임박</span>}
                                 </div>
-                                <div className="stockTable" role="group" aria-label={`${item.name} 재고 정보`}>
-                                  <div className="stockTableLabels">
-                                    <span>현재 수량</span>
-                                    <span>부족 기준</span>
-                                    <span>보관 위치</span>
-                                    <span>유통기한</span>
-                                  </div>
-                                  <div className="stockTableValues">
-                                    <div className="stockQuantityQuick">
-                                      <strong>{item.quantity}{item.unit}</strong>
-                                      <div className="quantityQuickButtons">
-                                        <button type="button" onClick={() => adjustStockQuantity(item.id, 1)} aria-label={`${item.name} 수량 1 증가`}>▲</button>
-                                        <button type="button" onClick={() => adjustStockQuantity(item.id, -1)} disabled={Number(item.quantity) <= 0} aria-label={`${item.name} 수량 1 감소`}>▼</button>
-                                      </div>
+                              </div>
+                              <div className="stockTable" role="group" aria-label={`${item.name} 재고 정보`}>
+                                <div className="stockTableLabels">
+                                  <span>현재 수량</span>
+                                  <span>부족 기준</span>
+                                  <span>보관 위치</span>
+                                  <span>유통기한</span>
+                                </div>
+                                <div className="stockTableValues">
+                                  <div className="stockQuantityQuick">
+                                    <strong>{item.quantity}{item.unit}</strong>
+                                    <div className="quantityQuickButtons">
+                                      <button type="button" onClick={() => adjustStockQuantity(item.id, 1)} aria-label={`${item.name} 수량 1 증가`}>▲</button>
+                                      <button type="button" onClick={() => adjustStockQuantity(item.id, -1)} disabled={Number(item.quantity) <= 0} aria-label={`${item.name} 수량 1 감소`}>▼</button>
                                     </div>
-                                    <strong>{item.threshold}{item.unit}</strong>
-                                    <strong>{item.storageLocation || '미설정'}</strong>
-                                    <strong>{item.noExpiry ? '없음' : item.expiryDate || '미설정'}</strong>
                                   </div>
+                                  <strong>{item.threshold}{item.unit}</strong>
+                                  <strong>{item.storageLocation || '미설정'}</strong>
+                                  <strong>{item.noExpiry ? '없음' : item.expiryDate || '미설정'}</strong>
                                 </div>
-                                <div className="cardActions">
-                                  <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
-                                  <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
-                                </div>
-                              </article>
-                            )
-                          })}
-                        </div>
-                      </div>
+                              </div>
+                              <div className="cardActions">
+                                <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
+                                <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
+                              </div>
+                            </article>
+                          )
+                        })}
                     </div>
                   </section>
-                )
-              })}
+                ))}
             </section>
           </section>
         )}
