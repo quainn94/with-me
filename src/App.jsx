@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const STORAGE_KEY = 'with-me-v0.0.6'
+const STORAGE_KEY = 'with-me-data'
 const days = ['월', '화', '수', '목', '금', '토', '일']
 const mealTypes = ['아침', '간식 A', '점심', '간식 B', '저녁']
-const categories = ['음식', '육아', '생활', '화장품', '반려동물']
+const defaultCategories = ['음식', '육아', '생활', '화장품', '반려동물']
 const reactionOptions = [
   { value: 'love', label: '아주 잘 먹음', icon: '😍' },
   { value: 'good', label: '잘 먹음', icon: '🙂' },
@@ -34,6 +34,7 @@ const defaultState = {
   menuReviews: [
     { id: 'mr1', menu: '순두부 계란찜', reaction: 'love', note: '부드러워서 잘 먹음' },
   ],
+  stockCategories: defaultCategories,
   stock: [
     { id: 's1', name: '계란', category: '음식', quantity: 4, unit: '개', threshold: 6, expiryDate: '', alertDays: 3, autoNeed: true },
     { id: 's2', name: '물티슈', category: '육아', quantity: 1, unit: '팩', threshold: 2, expiryDate: '', alertDays: 7, autoNeed: true },
@@ -53,8 +54,34 @@ defaultState.meals.월 = {
 
 function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? JSON.parse(saved) : defaultState
+    const legacyKeys = [
+      STORAGE_KEY,
+      'with-me-v0.0.6',
+      'with-me-v0.0.5',
+      'with-me-v0.4',
+      'with-me-v0.3',
+      'with-me-v0.2',
+    ]
+    const saved = legacyKeys
+      .map((key) => localStorage.getItem(key))
+      .find(Boolean)
+
+    if (!saved) return defaultState
+
+    const parsed = JSON.parse(saved)
+    return {
+      ...defaultState,
+      ...parsed,
+      stockCategories:
+        parsed.stockCategories?.length
+          ? parsed.stockCategories
+          : Array.from(
+              new Set([
+                ...defaultCategories,
+                ...(parsed.stock || []).map((item) => item.category).filter(Boolean),
+              ]),
+            ),
+    }
   } catch {
     return defaultState
   }
@@ -79,6 +106,7 @@ export default function App() {
   const [needDraft, setNeedDraft] = useState('')
   const [editingStock, setEditingStock] = useState(null)
   const [stockForm, setStockForm] = useState(blankStockForm())
+  const [categoryDraft, setCategoryDraft] = useState('')
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -213,6 +241,64 @@ export default function App() {
 
     updateData({ meals: nextMeals })
     setPasteMessage(applied ? '표를 식단에 반영했어요.' : '5행 × 7열 형태의 표가 필요해요.')
+  }
+
+  const addStockCategory = () => {
+    const name = categoryDraft.trim()
+    if (!name || data.stockCategories.includes(name)) return
+    updateData({ stockCategories: [...data.stockCategories, name] })
+    setCategoryDraft('')
+  }
+
+  const renameStockCategory = (oldName, newName) => {
+    const name = newName.trim()
+    if (!name || name === oldName || data.stockCategories.includes(name)) return
+    updateData({
+      stockCategories: data.stockCategories.map((category) =>
+        category === oldName ? name : category,
+      ),
+      stock: data.stock.map((item) =>
+        item.category === oldName ? { ...item, category: name } : item,
+      ),
+    })
+    if (stockForm.category === oldName) {
+      setStockForm((prev) => ({ ...prev, category: name }))
+    }
+  }
+
+  const deleteStockCategory = (category) => {
+    const fallback = '미분류'
+    const hasItems = data.stock.some((item) => item.category === category)
+    const nextCategories = data.stockCategories.filter((item) => item !== category)
+
+    if (hasItems && !nextCategories.includes(fallback)) {
+      nextCategories.push(fallback)
+    }
+
+    updateData({
+      stockCategories: nextCategories,
+      stock: hasItems
+        ? data.stock.map((item) =>
+            item.category === category ? { ...item, category: fallback } : item,
+          )
+        : data.stock,
+    })
+
+    if (stockForm.category === category) {
+      setStockForm((prev) => ({
+        ...prev,
+        category: nextCategories[0] || fallback,
+      }))
+    }
+  }
+
+  const moveStockCategory = (category, direction) => {
+    const index = data.stockCategories.indexOf(category)
+    const target = direction === 'up' ? index - 1 : index + 1
+    if (index < 0 || target < 0 || target >= data.stockCategories.length) return
+    const reordered = [...data.stockCategories]
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+    updateData({ stockCategories: reordered })
   }
 
   const saveStock = () => {
@@ -667,13 +753,71 @@ export default function App() {
 
         {tab === 'stock' && (
           <section>
+            <section className="pageCard categoryManager">
+              <div className="categoryManagerHead">
+                <div>
+                  <h2>카테고리 관리</h2>
+                  <p>추가·이름 변경·순서 변경을 앱에서 직접 할 수 있어요.</p>
+                </div>
+              </div>
+
+              <div className="addRow categoryAddRow">
+                <input
+                  value={categoryDraft}
+                  onChange={(e) => setCategoryDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addStockCategory()}
+                  placeholder="새 카테고리 이름"
+                />
+                <button onClick={addStockCategory}>추가</button>
+              </div>
+
+              <div className="categoryRows">
+                {data.stockCategories.map((category, index) => (
+                  <div className="categoryRow" key={category}>
+                    <input
+                      defaultValue={category}
+                      key={category}
+                      onBlur={(e) => renameStockCategory(category, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur()
+                      }}
+                    />
+                    <div className="categoryButtons">
+                      <button
+                        className="categoryMove"
+                        disabled={index === 0}
+                        onClick={() => moveStockCategory(category, 'up')}
+                        aria-label="위로"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className="categoryMove"
+                        disabled={index === data.stockCategories.length - 1}
+                        onClick={() => moveStockCategory(category, 'down')}
+                        aria-label="아래로"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        className="delete"
+                        onClick={() => deleteStockCategory(category)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="pageCard stockForm">
               <h2>{editingStock ? '재고 수정' : '재고 추가'}</h2>
               <div className="formGrid">
                 <Field label="품목명"><input value={stockForm.name} onChange={(e) => setStockForm({ ...stockForm, name: e.target.value })} /></Field>
                 <Field label="카테고리">
                   <select value={stockForm.category} onChange={(e) => setStockForm({ ...stockForm, category: e.target.value })}>
-                    {categories.map((category) => <option key={category}>{category}</option>)}
+                    {data.stockCategories.map((category) => <option key={category}>{category}</option>)}
                   </select>
                 </Field>
                 <Field label="현재 수량"><input type="number" value={stockForm.quantity} onChange={(e) => setStockForm({ ...stockForm, quantity: e.target.value })} /></Field>
@@ -693,7 +837,7 @@ export default function App() {
             </section>
 
             <section className="stockCategoryList">
-              {Array.from(new Set([...categories, ...data.stock.map((item) => item.category)]))
+              {Array.from(new Set([...data.stockCategories, ...data.stock.map((item) => item.category)]))
                 .filter((category) => data.stock.some((item) => item.category === category))
                 .map((category) => (
                   <section className="stockCategory" key={category}>

@@ -183,3 +183,116 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* v0.0.7 */
+.mealGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.categoryManager {
+  margin-bottom: 14px;
+}
+
+.categoryManagerHead p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.categoryRows {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.categoryRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fafcfb;
+}
+
+.categoryRow > input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-weight: 700;
+}
+
+.categoryButtons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.categoryMove {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+  color: var(--mint-dark);
+  background: var(--mint-light);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.categoryMove:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* 모든 체크박스를 동그란 선택 UI로 */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  border: 1.5px solid #cbd4cf;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+input[type='checkbox']::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mint-dark);
+  content: '';
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+input[type='checkbox']:checked {
+  border-color: var(--mint-dark);
+}
+
+input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+@media (max-width: 520px) {
+  .mealGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .categoryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .categoryButtons {
+    justify-content: flex-end;
+  }
+}
