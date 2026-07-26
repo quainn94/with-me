@@ -36,8 +36,8 @@ const defaultState = {
   ],
   stockCategories: defaultCategories,
   stock: [
-    { id: 's1', name: '계란', category: '음식', quantity: 4, unit: '개', threshold: 6, expiryDate: '', alertDays: 3, autoNeed: true },
-    { id: 's2', name: '물티슈', category: '육아', quantity: 1, unit: '팩', threshold: 2, expiryDate: '', alertDays: 7, autoNeed: true },
+    { id: 's1', name: '계란', category: '음식', quantity: 4, unit: '개', threshold: 6, expiryDate: '', noExpiry: true, alertDays: 3, autoNeed: true, storageLocation: '냉장' },
+    { id: 's2', name: '물티슈', category: '육아', quantity: 1, unit: '팩', threshold: 2, expiryDate: '', noExpiry: true, alertDays: 7, autoNeed: true, storageLocation: '팬트리' },
   ],
   needs: [
     { id: 'n1', name: '아기 치약', purchased: false, stockQuantity: 1, stockUnit: '개', sortOrder: 1 },
@@ -81,6 +81,11 @@ function loadState() {
                 ...(parsed.stock || []).map((item) => item.category).filter(Boolean),
               ]),
             ),
+      stock: (parsed.stock || defaultState.stock).map((item) => ({
+        storageLocation: '',
+        noExpiry: !item.expiryDate,
+        ...item,
+      })),
     }
   } catch {
     return defaultState
@@ -309,9 +314,11 @@ export default function App() {
     const item = {
       ...stockForm,
       name,
+      storageLocation: stockForm.storageLocation.trim(),
       quantity: Number(stockForm.quantity || 0),
       threshold: Number(stockForm.threshold || 0),
       alertDays: Number(stockForm.alertDays || 0),
+      expiryDate: stockForm.noExpiry ? '' : stockForm.expiryDate,
     }
     updateData({
       stock: editingStock
@@ -372,8 +379,10 @@ export default function App() {
               unit: item.stockUnit || '개',
               threshold: 0,
               expiryDate: '',
+              noExpiry: true,
               alertDays: 3,
               autoNeed: false,
+              storageLocation: '',
             },
           ]
     }
@@ -765,11 +774,16 @@ export default function App() {
                   <h2>카테고리 관리</h2>
                   <p>추가·이름 변경·삭제·순서 변경</p>
                 </div>
-                <span className={showCategoryManager ? 'collapseIcon open' : 'collapseIcon'}>⌄</span>
+                <span className={showCategoryManager ? 'collapseIcon open' : 'collapseIcon'} aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
               </button>
 
-              {showCategoryManager && (
-                <div className="collapseBody">
+              <div className={showCategoryManager ? 'collapsePanel open' : 'collapsePanel'}>
+                <div className="collapseInner">
+                  <div className="collapseBody">
                   <div className="addRow categoryAddRow">
                 <input
                   value={categoryDraft}
@@ -819,7 +833,7 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-              )}
+              </div>
             </section>
 
             <section className="pageCard collapsibleCard stockForm">
@@ -832,11 +846,16 @@ export default function App() {
                   <h2>{editingStock ? '재고 수정' : '재고 추가'}</h2>
                   <p>{editingStock ? '선택한 품목 정보를 수정해요.' : '새 품목을 재고에 등록해요.'}</p>
                 </div>
-                <span className={showStockForm ? 'collapseIcon open' : 'collapseIcon'}>⌄</span>
+                <span className={showStockForm ? 'collapseIcon open' : 'collapseIcon'} aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
               </button>
 
-              {showStockForm && (
-                <div className="collapseBody">
+              <div className={showStockForm ? 'collapsePanel open' : 'collapsePanel'}>
+                <div className="collapseInner">
+                  <div className="collapseBody">
               <div className="formGrid">
                 <Field label="품목명"><input value={stockForm.name} onChange={(e) => setStockForm({ ...stockForm, name: e.target.value })} /></Field>
                 <Field label="카테고리">
@@ -847,8 +866,43 @@ export default function App() {
                 <Field label="현재 수량"><input type="number" value={stockForm.quantity} onChange={(e) => setStockForm({ ...stockForm, quantity: e.target.value })} /></Field>
                 <Field label="단위"><input value={stockForm.unit} onChange={(e) => setStockForm({ ...stockForm, unit: e.target.value })} /></Field>
                 <Field label="부족 기준"><input type="number" value={stockForm.threshold} onChange={(e) => setStockForm({ ...stockForm, threshold: e.target.value })} /></Field>
-                <Field label="유통기한"><input type="date" value={stockForm.expiryDate} onChange={(e) => setStockForm({ ...stockForm, expiryDate: e.target.value })} /></Field>
-                <Field label="며칠 전 알림"><input type="number" value={stockForm.alertDays} onChange={(e) => setStockForm({ ...stockForm, alertDays: e.target.value })} /></Field>
+                <Field label="보관 위치">
+                  <input
+                    value={stockForm.storageLocation}
+                    onChange={(e) => setStockForm({ ...stockForm, storageLocation: e.target.value })}
+                    placeholder="예: 냉장고, 팬트리, 욕실장"
+                  />
+                </Field>
+                <Field label="유통기한">
+                  <input
+                    type="date"
+                    value={stockForm.expiryDate}
+                    disabled={stockForm.noExpiry}
+                    onChange={(e) => setStockForm({ ...stockForm, expiryDate: e.target.value })}
+                  />
+                </Field>
+                <label className="checkField expiryCheckField">
+                  <input
+                    type="checkbox"
+                    checked={stockForm.noExpiry}
+                    onChange={(e) =>
+                      setStockForm({
+                        ...stockForm,
+                        noExpiry: e.target.checked,
+                        expiryDate: e.target.checked ? '' : stockForm.expiryDate,
+                      })
+                    }
+                  />
+                  유통기한 없음
+                </label>
+                <Field label="며칠 전 알림">
+                  <input
+                    type="number"
+                    value={stockForm.alertDays}
+                    disabled={stockForm.noExpiry}
+                    onChange={(e) => setStockForm({ ...stockForm, alertDays: e.target.value })}
+                  />
+                </Field>
                 <label className="checkField">
                   <input type="checkbox" checked={stockForm.autoNeed} onChange={(e) => setStockForm({ ...stockForm, autoNeed: e.target.checked })} />
                   부족하면 Need에 자동 추가
@@ -871,7 +925,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
             </section>
 
             <section className="stockCategoryList">
@@ -901,7 +955,8 @@ export default function App() {
                               <div className="stockSummary">
                                 <b>{item.quantity}{item.unit}</b>
                                 <span>부족 기준 {item.threshold}{item.unit}</span>
-                                <span>{item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
+                                <span>{item.storageLocation ? `보관 ${item.storageLocation}` : '보관 위치 미설정'}</span>
+                                <span>{item.noExpiry ? '유통기한 없음' : item.expiryDate ? `유통기한 ${item.expiryDate}` : '유통기한 미설정'}</span>
                               </div>
                               <div className="cardActions">
                                 <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
@@ -997,11 +1052,22 @@ export default function App() {
 }
 
 function blankStockForm() {
-  return { name: '', category: '음식', quantity: 1, unit: '개', threshold: 0, expiryDate: '', alertDays: 3, autoNeed: false }
+  return {
+    name: '',
+    category: '음식',
+    quantity: 1,
+    unit: '개',
+    threshold: 0,
+    storageLocation: '',
+    expiryDate: '',
+    noExpiry: false,
+    alertDays: 3,
+    autoNeed: false,
+  }
 }
 
 function isExpiring(item) {
-  if (!item.expiryDate) return false
+  if (item.noExpiry || !item.expiryDate) return false
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const expiry = new Date(`${item.expiryDate}T00:00:00`)

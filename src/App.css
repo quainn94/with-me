@@ -298,7 +298,9 @@ input[type='checkbox']:checked::before {
 }
 
 
-/* v0.0.8 collapsible stock sections */
+
+
+/* v0.0.9 smooth stock accordion */
 .collapsibleCard {
   overflow: hidden;
 }
@@ -313,6 +315,11 @@ input[type='checkbox']:checked::before {
   text-align: left;
   background: transparent;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.collapseHeader:active {
+  opacity: 0.72;
 }
 
 .collapseHeader h2 {
@@ -328,22 +335,66 @@ input[type='checkbox']:checked::before {
 
 .collapseIcon {
   display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   place-items: center;
-  border-radius: 50%;
+  color: #7d8781;
+  transition: transform 0.26s cubic-bezier(.2,.8,.2,1), color 0.2s ease;
+}
+
+.collapseIcon svg {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+}
+
+.collapseIcon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.collapseHeader:hover .collapseIcon {
   color: var(--mint-dark);
-  background: var(--mint-light);
-  font-size: 22px;
-  line-height: 1;
-  transition: transform 0.18s ease;
 }
 
 .collapseIcon.open {
   transform: rotate(180deg);
+  color: var(--mint-dark);
+}
+
+.collapsePanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.3s cubic-bezier(.2,.8,.2,1),
+    opacity 0.22s ease;
+}
+
+.collapsePanel.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.collapseInner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .collapseBody {
   padding-top: 16px;
+}
+
+.formGrid input:disabled {
+  color: #a5aca8;
+  background: #f0f3f1;
+  cursor: not-allowed;
+}
+
+.expiryCheckField {
+  align-self: end;
 }
