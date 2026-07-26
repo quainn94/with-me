@@ -834,6 +834,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              </div>
             </section>
 
             <section className="pageCard collapsibleCard stockForm">
@@ -925,6 +926,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+              </div>
               </div>
             </section>
 
