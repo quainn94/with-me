@@ -1269,11 +1269,20 @@ export default function App() {
                                 </div>
                                 <div className="stockTableValues">
                                   <div className="stockQuantityQuick">
+                                    <button
+                                      type="button"
+                                      className="quantityQuickButton"
+                                      onClick={() => adjustStockQuantity(item.id, -1)}
+                                      disabled={Number(item.quantity) <= 0}
+                                      aria-label={`${item.name} 수량 1 감소`}
+                                    >−</button>
                                     <strong>{item.quantity}{item.unit}</strong>
-                                    <div className="quantityQuickButtons">
-                                      <button type="button" onClick={() => adjustStockQuantity(item.id, 1)} aria-label={`${item.name} 수량 1 증가`}>▲</button>
-                                      <button type="button" onClick={() => adjustStockQuantity(item.id, -1)} disabled={Number(item.quantity) <= 0} aria-label={`${item.name} 수량 1 감소`}>▼</button>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      className="quantityQuickButton"
+                                      onClick={() => adjustStockQuantity(item.id, 1)}
+                                      aria-label={`${item.name} 수량 1 증가`}
+                                    >+</button>
                                   </div>
                                   <strong>{item.threshold}{item.unit}</strong>
                                   <strong>{item.storageLocation || '미설정'}</strong>

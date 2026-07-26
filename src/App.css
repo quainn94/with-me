@@ -602,3 +602,76 @@ input[type='checkbox']:checked::before {
   .stockQuantityQuick{gap:4px}
   .quantityQuickButtons button{width:22px;height:19px}
 }
+
+/* v0.1.8 stock card alignment and quantity controls */
+.stockTableLabels,
+.stockTableValues{
+  text-align:center;
+}
+
+.stockTableLabels > *,
+.stockTableValues > *{
+  justify-self:stretch;
+  text-align:center;
+}
+
+.stockTableValues > strong{
+  display:block;
+  width:100%;
+  text-align:center;
+}
+
+.stockQuantityQuick{
+  justify-content:center;
+  gap:7px;
+}
+
+.quantityQuickButton{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  padding:0;
+  border:1px solid rgba(61, 181, 159, .28);
+  border-radius:50%;
+  background:#fff;
+  color:var(--mint-strong);
+  font-size:18px;
+  font-weight:700;
+  line-height:1;
+  box-shadow:0 3px 9px rgba(44, 113, 101, .10);
+  transition:transform .12s ease, background .12s ease, box-shadow .12s ease;
+}
+
+.quantityQuickButton:hover{
+  background:var(--mint-soft);
+  box-shadow:0 4px 12px rgba(44, 113, 101, .15);
+}
+
+.quantityQuickButton:active{
+  transform:scale(.92);
+}
+
+.quantityQuickButton:disabled{
+  opacity:.35;
+  cursor:not-allowed;
+  box-shadow:none;
+}
+
+@media (max-width:640px){
+  .stockTableLabels,
+  .stockTableValues{
+    text-align:center;
+  }
+
+  .stockQuantityQuick{
+    gap:4px;
+  }
+
+  .quantityQuickButton{
+    width:24px;
+    height:24px;
+    font-size:16px;
+  }
+}
