@@ -98,6 +98,7 @@ export default function App() {
   const [categoryDraft, setCategoryDraft] = useState('')
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [showStockForm, setShowStockForm] = useState(false)
+  const [openStockCategories, setOpenStockCategories] = useState({})
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [cloudLoading, setCloudLoading] = useState(false)
@@ -1239,66 +1240,125 @@ export default function App() {
             <section className="stockCategoryList">
               {Array.from(new Set([...data.stockCategories, ...data.stock.map((item) => item.category)]))
                 .filter((category) => data.stock.some((item) => item.category === category))
-                .map((category) => (
-                  <section className="stockCategory" key={category}>
-                    <div className="stockCategoryHead">
-                      <h3>{category}</h3>
-                      <span>{data.stock.filter((item) => item.category === category).length}개</span>
-                    </div>
-                    <div className="stockList">
-                      {data.stock
-                        .filter((item) => item.category === category)
-                        .map((item) => {
-                          const low = Number(item.quantity) <= Number(item.threshold)
-                          const expiring = isExpiring(item)
-                          return (
-                            <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
-                              <div className="stockTop">
-                                <div><h3>{item.name}</h3></div>
-                                <div className="badgeGroup">
-                                  {low && <span className="badge coral">부족</span>}
-                                  {expiring && <span className="badge purple">기한 임박</span>}
-                                </div>
-                              </div>
-                              <div className="stockTable" role="group" aria-label={`${item.name} 재고 정보`}>
-                                <div className="stockTableLabels">
-                                  <span>현재 수량</span>
-                                  <span>부족 기준</span>
-                                  <span>보관 위치</span>
-                                  <span>유통기한</span>
-                                </div>
-                                <div className="stockTableValues">
-                                  <div className="stockQuantityQuick">
-                                    <button
-                                      type="button"
-                                      className="quantityQuickButton"
-                                      onClick={() => adjustStockQuantity(item.id, -1)}
-                                      disabled={Number(item.quantity) <= 0}
-                                      aria-label={`${item.name} 수량 1 감소`}
-                                    >−</button>
-                                    <strong>{item.quantity}{item.unit}</strong>
-                                    <button
-                                      type="button"
-                                      className="quantityQuickButton"
-                                      onClick={() => adjustStockQuantity(item.id, 1)}
-                                      aria-label={`${item.name} 수량 1 증가`}
-                                    >+</button>
+                .map((category) => {
+                  const categoryItems = data.stock.filter((item) => item.category === category)
+                  const hasWarning = categoryItems.some(
+                    (item) => Number(item.quantity) <= Number(item.threshold) || isExpiring(item),
+                  )
+                  const isOpen = Boolean(openStockCategories[category])
+
+                  return (
+                    <section className={isOpen ? 'stockCategory open' : 'stockCategory'} key={category}>
+                      <button
+                        type="button"
+                        className="stockCategoryHead"
+                        onClick={() =>
+                          setOpenStockCategories((prev) => ({
+                            ...prev,
+                            [category]: !prev[category],
+                          }))
+                        }
+                        aria-expanded={isOpen}
+                      >
+                        <span className="stockCategoryTitleWrap">
+                          <h3>{category}</h3>
+                          {hasWarning && <span className="stockCategoryAlertDot" aria-label="확인할 재고 있음" />}
+                        </span>
+                        <span className="stockCategoryChevron" aria-hidden="true">⌄</span>
+                      </button>
+
+                      <div className="stockCategoryBody">
+                        <div className="stockCategoryBodyInner">
+                          <div className="stockList">
+                            {categoryItems.map((item) => {
+                              const low = Number(item.quantity) <= Number(item.threshold)
+                              const expiring = isExpiring(item)
+                              return (
+                                <article className={low || expiring ? 'stockCard warning' : 'stockCard'} key={item.id}>
+                                  <div className="stockTop">
+                                    <div><h3>{item.name}</h3></div>
+                                    <div className="badgeGroup">
+                                      {low && <span className="badge coral">부족</span>}
+                                      {expiring && <span className="badge purple">기한 임박</span>}
+                                    </div>
                                   </div>
-                                  <strong>{item.threshold}{item.unit}</strong>
-                                  <strong>{item.storageLocation || '미설정'}</strong>
-                                  <strong>{item.noExpiry ? '없음' : item.expiryDate || '미설정'}</strong>
-                                </div>
-                              </div>
-                              <div className="cardActions">
-                                <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
-                                <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
-                              </div>
-                            </article>
-                          )
-                        })}
-                    </div>
-                  </section>
-                ))}
+                                  <div className="stockTable" role="group" aria-label={`${item.name} 재고 정보`}>
+                                    <div className="stockTableLabels">
+                                      <span>현재 수량</span>
+                                      <span>부족 기준</span>
+                                      <span>보관 위치</span>
+                                      <span>유통기한</span>
+                                    </div>
+                                    <div className="stockTableValues">
+                                      <div className="stockQuantityQuick">
+                                        <button
+                                          type="button"
+                                          className="quantityQuickButton"
+                                          onClick={() => adjustStockQuantity(item.id, -1)}
+                                          disabled={Number(item.quantity) <= 0}
+                                          aria-label={`${item.name} 수량 1 감소`}
+                                        >−</button>
+                                        <strong>{item.quantity}{item.unit}</strong>
+                                        <button
+                                          type="button"
+                                          className="quantityQuickButton"
+                                          onClick={() => adjustStockQuantity(item.id, 1)}
+                                          aria-label={`${item.name} 수량 1 증가`}
+                                        >+</button>
+                                      </div>
+                                      <strong>{item.threshold}{item.unit}</strong>
+                                      <strong>{item.storageLocation || '미설정'}</strong>
+                                      <strong>{item.noExpiry ? '없음' : item.expiryDate || '미설정'}</strong>
+                                    </div>
+                                  </div>
+                                  <div className="cardActions">
+                                    <button onClick={() => { setEditingStock(item.id); setStockForm({ ...item }); setShowStockForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>수정</button>
+                                    <button className="delete" onClick={() => updateData({ stock: data.stock.filter((x) => x.id !== item.id) })}>삭제</button>
+                                  </div>
+                                </article>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  )
+                })}
+            </section>
+          </section>
+        )}
+
+        {tab === 'more' && (
+          <section className="morePage">
+            <button type="button" className="moreMenuCard" onClick={() => setTab('need')}>
+              <span className="moreMenuIcon">✓</span>
+              <span className="moreMenuText">
+                <strong>Need</strong>
+                <small>사야 할 것과 구매 완료 항목</small>
+              </span>
+              {data.needs.filter((item) => !item.purchased).length > 0 && (
+                <span className="moreMenuBadge">
+                  {data.needs.filter((item) => !item.purchased).length}
+                </span>
+              )}
+              <span className="moreMenuArrow">›</span>
+            </button>
+
+            <button type="button" className="moreMenuCard disabled" disabled>
+              <span className="moreMenuIcon">⌂</span>
+              <span className="moreMenuText">
+                <strong>집안 지도</strong>
+                <small>보관 위치를 한눈에 보는 기능</small>
+              </span>
+              <span className="comingSoonBadge">준비 중</span>
+            </button>
+
+            <section className="moreInfoCard">
+              <div>
+                <strong>앱 버전</strong>
+                <span>v0.1.9</span>
+              </div>
+              <button type="button" onClick={signOut}>로그아웃</button>
             </section>
           </section>
         )}
@@ -1376,7 +1436,13 @@ export default function App() {
         <Nav label="Home" icon="⌂" active={tab === 'home'} onClick={() => setTab('home')} />
         <Nav label="Meals" icon="◫" active={tab === 'meals'} onClick={() => setTab('meals')} />
         <Nav label="Stock" icon="▣" active={tab === 'stock'} onClick={() => setTab('stock')} />
-        <Nav label="Need" icon="✓" active={tab === 'need'} onClick={() => setTab('need')} />
+        <Nav
+          label="더보기"
+          icon="•••"
+          active={tab === 'more' || tab === 'need'}
+          badge={data.needs.filter((item) => !item.purchased).length}
+          onClick={() => setTab('more')}
+        />
       </nav>
     </div>
   )
@@ -1470,17 +1536,20 @@ function Field({ label, children }) {
   return <label className="field"><span>{label}</span>{children}</label>
 }
 
-function Nav({ label, icon, active, onClick }) {
+function Nav({ label, icon, active, badge = 0, onClick }) {
   return (
     <button className={active ? 'navButton active' : 'navButton'} onClick={onClick}>
-      <span className="navIcon">{icon}</span>
+      <span className="navIconWrap">
+        <span className="navIcon">{icon}</span>
+        {badge > 0 && <span className="navBadge">{badge > 99 ? '99+' : badge}</span>}
+      </span>
       <span>{label}</span>
     </button>
   )
 }
 
 function titleFor(tab) {
-  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need' }[tab]
+  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need', more: '더보기' }[tab]
 }
 
 function subtitleFor(tab) {
@@ -1490,5 +1559,6 @@ function subtitleFor(tab) {
     meals: '이번 주 식단과 메뉴 반응을 한눈에.',
     stock: '부족 기준과 유통기한을 함께 관리해요.',
     need: '사야 할 것과 구매 완료를 나눠봐요.',
+    more: '보조 기능과 설정을 한곳에 모았어요.',
   }[tab]
 }
