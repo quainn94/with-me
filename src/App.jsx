@@ -1511,7 +1511,7 @@ export default function App() {
             <section className="moreInfoCard">
               <div>
                 <strong>앱 버전</strong>
-                <span>v0.1.14</span>
+                <span>v0.1.16</span>
               </div>
               <button type="button" onClick={signOut}>로그아웃</button>
             </section>
