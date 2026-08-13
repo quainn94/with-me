@@ -348,7 +348,18 @@ export default function App() {
     })
   }
 
+  const playCoinSound = () => {
+    try {
+      const audio = new Audio(`${import.meta.env.BASE_URL}coin.wav`)
+      audio.volume = 0.38
+      audio.play().catch(() => {})
+    } catch {
+      // 효과음 재생이 막혀도 적립 기능은 그대로 동작해요.
+    }
+  }
+
   const addWipeSticker = () => {
+    playCoinSound()
     const quest = data.wipeQuest || defaultState.wipeQuest
     updateData({
       wipeQuest: {
@@ -1500,7 +1511,7 @@ export default function App() {
             <section className="moreInfoCard">
               <div>
                 <strong>앱 버전</strong>
-                <span>v0.1.13</span>
+                <span>v0.1.14</span>
               </div>
               <button type="button" onClick={signOut}>로그아웃</button>
             </section>
