@@ -46,6 +46,15 @@ const defaultState = {
   houseLocations: [],
   careNotes: [],
   developmentRecords: [],
+  wipeQuest: {
+    unitPrice: 35,
+    transferTarget: 10000,
+    currentCount: 0,
+    totalSaved: 0,
+    transferCount: 0,
+    lastTransferAmount: 0,
+    lastTransferAt: '',
+  },
 }
 
 defaultState.meals.월 = {
@@ -336,6 +345,37 @@ export default function App() {
       title: '',
       correctedAge: '',
       note: '',
+    })
+  }
+
+  const addWipeSticker = () => {
+    const quest = data.wipeQuest || defaultState.wipeQuest
+    updateData({
+      wipeQuest: {
+        ...quest,
+        currentCount: Number(quest.currentCount || 0) + 1,
+        totalSaved: Number(quest.totalSaved || 0) + 35,
+      },
+    })
+  }
+
+  const resetWipeQuestAfterTransfer = () => {
+    const quest = data.wipeQuest || defaultState.wipeQuest
+    const currentAmount = Number(quest.currentCount || 0) * 35
+    if (currentAmount < 10000) return
+    const confirmed = window.confirm(
+      `${currentAmount.toLocaleString('ko-KR')}원을 하나은행에 송금했나요?\n현재 스티커판만 초기화하고 누적 절약액은 유지해요.`,
+    )
+    if (!confirmed) return
+
+    updateData({
+      wipeQuest: {
+        ...quest,
+        currentCount: 0,
+        transferCount: Number(quest.transferCount || 0) + 1,
+        lastTransferAmount: currentAmount,
+        lastTransferAt: new Date().toISOString(),
+      },
     })
   }
 
@@ -1460,12 +1500,116 @@ export default function App() {
             <section className="moreInfoCard">
               <div>
                 <strong>앱 버전</strong>
-                <span>v0.1.10</span>
+                <span>v0.1.13</span>
               </div>
               <button type="button" onClick={signOut}>로그아웃</button>
             </section>
           </section>
         )}
+
+        {tab === 'wipeQuest' && (() => {
+          const quest = data.wipeQuest || defaultState.wipeQuest
+          const currentCount = Number(quest.currentCount || 0)
+          const currentAmount = currentCount * 35
+          const totalSaved = Number(quest.totalSaved || 0)
+          const target = 10000
+          const remaining = Math.max(0, target - currentAmount)
+          const progress = Math.min(100, (currentAmount / target) * 100)
+          const currentBoardNumber = Math.floor(Math.max(currentCount - 1, 0) / 100) + 1
+          const currentBoardFilled = currentCount === 0 ? 0 : ((currentCount - 1) % 100) + 1
+
+          return (
+            <section className="featurePage wipeQuestPage">
+              <button className="backToMore" type="button" onClick={() => setTab('more')}>‹ 더보기</button>
+
+              <section className="wipeHero">
+                <div className="wipeHeroTop">
+                  <div>
+                    <span className="wipeEyebrow">현재 적립</span>
+                    <strong className="wipeCurrentAmount">{currentAmount.toLocaleString('ko-KR')}원</strong>
+                  </div>
+                  <div className="wipeUnitPrice">1장 = 35원</div>
+                </div>
+
+                <div className="wipeProgressTrack" aria-label="하나은행 송금 목표 진행률">
+                  <div className="wipeProgressBar" style={{ width: `${progress}%` }} />
+                </div>
+
+                <div className="wipeProgressMeta">
+                  {currentAmount >= target ? (
+                    <strong className="wipeReady">🎉 하나은행 송금 가능!</strong>
+                  ) : (
+                    <span>10,000원까지 {remaining.toLocaleString('ko-KR')}원 남음</span>
+                  )}
+                  <span>{currentCount.toLocaleString('ko-KR')}장 절약</span>
+                </div>
+
+                <div className="wipeLifetime">
+                  <span>현재까지 아낀 금액</span>
+                  <strong>{totalSaved.toLocaleString('ko-KR')}원</strong>
+                  <small>스티커판을 초기화해도 이 금액은 계속 누적돼요.</small>
+                </div>
+              </section>
+
+              <section className="pageCard wipeStickerCard">
+                <div className="wipeStickerHead">
+                  <div>
+                    <span className="wipeEyebrow">COIN BOARD</span>
+                    <h2>동전 스티커판</h2>
+                    <p>{currentBoardNumber}판째 · 한 판 100장</p>
+                  </div>
+                  <button className="wipeAddButton" type="button" onClick={addWipeSticker}>
+                    <span className="wipeAddCoin">₩</span>
+                    +35원 붙이기
+                  </button>
+                </div>
+
+                <div className="wipeStickerBoard">
+                  {Array.from({ length: 100 }, (_, index) => {
+                    const filled = index < currentBoardFilled
+                    const isNext = index === currentBoardFilled
+                    return (
+                      <button
+                        type="button"
+                        key={index}
+                        className={filled ? 'wipeStickerSlot filled' : isNext ? 'wipeStickerSlot next' : 'wipeStickerSlot'}
+                        onClick={isNext ? addWipeSticker : undefined}
+                        disabled={!isNext}
+                        aria-label={filled ? `${index + 1}번째 동전 적립 완료` : isNext ? '다음 동전 붙이기' : '빈 스티커 칸'}
+                      >
+                        {filled ? <span className="wipeCoinIcon">₩</span> : <span>{index + 1}</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="wipeBoardHint">다음 빈 칸을 눌러도 35원이 적립돼요.</p>
+              </section>
+
+              <section className="wipeTransferCard">
+                <div>
+                  <span>하나은행 송금 기준</span>
+                  <strong>10,000원 이상</strong>
+                  {Number(quest.transferCount || 0) > 0 && (
+                    <small>
+                      지금까지 {Number(quest.transferCount || 0)}회 송금
+                      {Number(quest.lastTransferAmount || 0) > 0
+                        ? ` · 마지막 ${Number(quest.lastTransferAmount).toLocaleString('ko-KR')}원`
+                        : ''}
+                    </small>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="wipeResetButton"
+                  disabled={currentAmount < target}
+                  onClick={resetWipeQuestAfterTransfer}
+                >
+                  입금 후 초기화
+                </button>
+              </section>
+            </section>
+          )
+        })()}
 
         {tab === 'houseMap' && (
           <section className="featurePage">
@@ -1794,6 +1938,7 @@ export default function App() {
       <nav className="nav">
         <Nav label="Home" icon="⌂" active={tab === 'home'} onClick={() => setTab('home')} />
         <Nav label="Meals" icon="◫" active={tab === 'meals'} onClick={() => setTab('meals')} />
+        <Nav label="퀘스트" icon="🪙" active={tab === 'wipeQuest'} onClick={() => setTab('wipeQuest')} />
         <Nav label="Stock" icon="▣" active={tab === 'stock'} onClick={() => setTab('stock')} />
         <Nav
           label="더보기"
@@ -1824,6 +1969,12 @@ function normalizeState(value) {
     houseLocations: Array.isArray(parsed.houseLocations) ? parsed.houseLocations : [],
     careNotes: Array.isArray(parsed.careNotes) ? parsed.careNotes : [],
     developmentRecords: Array.isArray(parsed.developmentRecords) ? parsed.developmentRecords : [],
+    wipeQuest: {
+      ...defaultState.wipeQuest,
+      ...(parsed.wipeQuest && typeof parsed.wipeQuest === 'object' ? parsed.wipeQuest : {}),
+      unitPrice: 35,
+      transferTarget: 10000,
+    },
   }
 }
 
@@ -1920,7 +2071,7 @@ function Nav({ label, icon, active, badge = 0, onClick }) {
 }
 
 function titleFor(tab) {
-  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need', more: '더보기', houseMap: '집안 위치도', careNotes: '증상 대응 노트', development: '발달 기록' }[tab]
+  return { home: '오늘도 가볍게.', todo: 'Todo', meals: 'Meals', stock: 'Stock', need: 'Need', more: '더보기', houseMap: '집안 위치도', careNotes: '증상 대응 노트', development: '발달 기록', wipeQuest: '물티슈 절약 퀘스트' }[tab]
 }
 
 function subtitleFor(tab) {
@@ -1934,5 +2085,6 @@ function subtitleFor(tab) {
     houseMap: '방과 수납 위치를 차근차근 정리해요.',
     careNotes: '우리 아이에게 있었던 증상과 대응을 남겨요.',
     development: '작은 변화도 날짜와 함께 기록해요.',
+    wipeQuest: '한 장씩 아껴서 진짜 돈으로 모아봐요.',
   }[tab]
 }

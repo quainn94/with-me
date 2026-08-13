@@ -1048,3 +1048,260 @@ input[type='checkbox']:checked::before {
     border-radius:18px;
   }
 }
+
+
+/* v0.1.11 물티슈 절약 퀘스트 */
+.wipeQuestPage{
+  padding-bottom:24px;
+}
+.wipeHero{
+  padding:22px;
+  border:1px solid rgba(88,185,164,.18);
+  border-radius:24px;
+  background:linear-gradient(145deg,#effaf6 0%,#ffffff 68%);
+  box-shadow:var(--shadow);
+}
+.wipeHeroTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.wipeHeroTop > div:first-child{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.wipeEyebrow{
+  color:var(--mint-strong);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+}
+.wipeCurrentAmount{
+  color:var(--ink);
+  font-size:34px;
+  line-height:1.05;
+  letter-spacing:-.04em;
+}
+.wipeUnitPrice{
+  padding:8px 11px;
+  border-radius:999px;
+  background:#fff;
+  color:var(--mint-strong);
+  font-size:12px;
+  font-weight:800;
+  box-shadow:0 5px 16px rgba(44,113,101,.08);
+}
+.wipeProgressTrack{
+  height:11px;
+  margin-top:20px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e6efec;
+}
+.wipeProgressBar{
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#69d3bc,#f3c85d);
+  transition:width .2s ease;
+}
+.wipeProgressMeta{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:9px;
+  color:var(--muted);
+  font-size:12px;
+}
+.wipeReady{
+  color:#c58b16;
+}
+.wipeLifetime{
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:end;
+  gap:4px 12px;
+  margin-top:20px;
+  padding-top:17px;
+  border-top:1px solid var(--line);
+}
+.wipeLifetime span{
+  color:var(--muted);
+  font-size:13px;
+}
+.wipeLifetime strong{
+  color:var(--mint-strong);
+  font-size:22px;
+}
+.wipeLifetime small{
+  grid-column:1/-1;
+  color:var(--muted);
+  font-size:11px;
+}
+.wipeStickerCard{
+  overflow:hidden;
+}
+.wipeStickerHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+.wipeStickerHead h2{
+  margin:3px 0 2px;
+}
+.wipeStickerHead p{
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+}
+.wipeAddButton{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:10px 14px;
+  border:0;
+  border-radius:14px;
+  background:var(--mint);
+  color:#fff;
+  font-weight:900;
+  box-shadow:0 8px 20px rgba(66,188,164,.22);
+}
+.wipeAddCoin{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background:#ffe082;
+  color:#9b7611;
+  font-size:12px;
+  font-weight:900;
+}
+.wipeStickerBoard{
+  display:grid;
+  grid-template-columns:repeat(10,minmax(0,1fr));
+  gap:7px;
+}
+.wipeStickerSlot{
+  aspect-ratio:1;
+  min-width:0;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px dashed #d9e4e1;
+  border-radius:50%;
+  background:#fafcfb;
+  color:#b4bfbc;
+  font-size:9px;
+}
+.wipeStickerSlot.filled{
+  border-style:solid;
+  border-color:#f2cd66;
+  background:#fff7cf;
+  color:#9f7911;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.7),0 3px 8px rgba(170,126,20,.09);
+}
+.wipeStickerSlot.next{
+  cursor:pointer;
+  border-color:var(--mint);
+  background:var(--mint-soft);
+  color:var(--mint-strong);
+  box-shadow:0 0 0 3px rgba(89,200,176,.1);
+}
+.wipeStickerSlot:disabled{
+  cursor:default;
+}
+.wipeCoinIcon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:76%;
+  height:76%;
+  border-radius:50%;
+  background:linear-gradient(145deg,#ffe88a,#efbf44);
+  color:#92700e;
+  font-size:11px;
+  font-weight:900;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.8);
+}
+.wipeBoardHint{
+  margin:12px 0 0;
+  color:var(--muted);
+  font-size:11px;
+  text-align:center;
+}
+.wipeTransferCard{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:18px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:#fff;
+  box-shadow:var(--shadow);
+}
+.wipeTransferCard > div{
+  display:grid;
+  gap:3px;
+}
+.wipeTransferCard span,
+.wipeTransferCard small{
+  color:var(--muted);
+  font-size:12px;
+}
+.wipeTransferCard strong{
+  font-size:18px;
+}
+.wipeResetButton{
+  padding:10px 14px;
+  border:0;
+  border-radius:13px;
+  background:#1f8f73;
+  color:#fff;
+  font-weight:900;
+}
+.wipeResetButton:disabled{
+  background:#e7ecea;
+  color:#9ba6a3;
+  cursor:not-allowed;
+}
+
+@media(max-width:640px){
+  .wipeHero{
+    padding:18px;
+    border-radius:20px;
+  }
+  .wipeCurrentAmount{
+    font-size:30px;
+  }
+  .wipeProgressMeta{
+    font-size:11px;
+  }
+  .wipeStickerHead{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .wipeAddButton{
+    width:100%;
+    justify-content:center;
+  }
+  .wipeStickerBoard{
+    gap:5px;
+  }
+  .wipeCoinIcon{
+    font-size:10px;
+  }
+  .wipeTransferCard{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .wipeResetButton{
+    width:100%;
+  }
+}
