@@ -1,21 +1,17 @@
 {
-  "name": "With Me",
+  "name": "With Me Life",
   "short_name": "With Me",
   "start_url": "/with-me/",
-  "scope": "/with-me/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#9fd8ca",
+  "background_color": "#fbfaf5",
+  "theme_color": "#d8908f",
   "icons": [
     {
-      "src": "/with-me/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/with-me/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/with-me/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
-  ]
+  ],
+  "scope": "/with-me/"
 }
