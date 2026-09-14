@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import './App.css'
 
-const VERSION = '0.2.0'
-const LOCAL_KEY = 'with-me-life-v0.2'
-const LEGACY_LOCAL_KEY = 'with-me-life-v0.1'
+const VERSION = '0.3.0'
+const LOCAL_KEY = 'with-me-life-v0.3'
+const LEGACY_LOCAL_KEY = 'with-me-life-v0.2'
+const LEGACY_LOCAL_KEY_2 = 'with-me-life-v0.1'
 const today = () => new Date().toISOString().slice(0, 10)
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 const money = (n = 0) => `${Math.round(Number(n) || 0).toLocaleString('ko-KR')}원`
@@ -14,11 +15,37 @@ const dateKey = (value) => new Date(`${value}T12:00:00`)
 
 const defaultState = { ingredients: [], purchases: [], usages: [], recipes: [], weights: [] }
 
+
+const CALORIE_PRESETS = [
+  { keys: ['청양고추', '고추'], kcal100: 29, unit: '개', grams: 7 },
+  { keys: ['깻잎'], kcal100: 41, unit: '장', grams: 2 },
+  { keys: ['깻순', '깻잎순'], kcal100: 37, unit: '줌', grams: 15 },
+  { keys: ['상추'], kcal100: 18, unit: '장', grams: 5 },
+  { keys: ['양파'], kcal100: 40, unit: 'g', grams: 1 },
+  { keys: ['대파'], kcal100: 34, unit: 'g', grams: 1 },
+  { keys: ['양배추'], kcal100: 25, unit: 'g', grams: 1 },
+  { keys: ['브로콜리'], kcal100: 34, unit: 'g', grams: 1 },
+  { keys: ['토마토'], kcal100: 18, unit: 'g', grams: 1 },
+  { keys: ['오이'], kcal100: 15, unit: 'g', grams: 1 },
+  { keys: ['감자'], kcal100: 77, unit: 'g', grams: 1 },
+  { keys: ['고구마'], kcal100: 86, unit: 'g', grams: 1 },
+]
+
+function caloriePresetFor(name = '') {
+  const key = name.trim().replace(/\s+/g, '')
+  return CALORIE_PRESETS.find((p) => p.keys.some((k) => key.includes(k))) || null
+}
+
 const normalizeIngredient = (x) => ({
   ...x,
   isPersonal: x?.isPersonal ?? x?.is_personal ?? true,
   kcalBaseQty: Number(x?.kcalBaseQty ?? x?.kcal_base_qty ?? 100),
   kcalBaseValue: Number(x?.kcalBaseValue ?? x?.kcal_base_value ?? 0),
+  calorieMode: x?.calorieMode ?? x?.calorie_mode ?? 'exact',
+  estimatedUnitGrams: Number(x?.estimatedUnitGrams ?? x?.estimated_unit_grams ?? 0),
+  manualUnitCost: Number(x?.manualUnitCost ?? x?.manual_unit_cost ?? 0),
+  isHomemade: Boolean(x?.isHomemade ?? x?.is_homemade ?? false),
+  sourceRecipeId: x?.sourceRecipeId ?? x?.source_recipe_id ?? null,
 })
 
 const normalizeUsage = (x) => ({
@@ -38,7 +65,7 @@ const normalizeState = (raw) => ({
 
 function loadLocal() {
   try {
-    const saved = localStorage.getItem(LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY)
+    const saved = localStorage.getItem(LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY_2)
     return saved ? normalizeState(JSON.parse(saved)) : defaultState
   } catch {
     return defaultState
@@ -51,9 +78,35 @@ function latestPurchaseFor(ingredientId, purchases) {
     .sort((a, b) => `${b.date}${b.createdAt || ''}`.localeCompare(`${a.date}${a.createdAt || ''}`))[0]
 }
 
-function unitPrice(ingredientId, purchases) {
+function pricePerIngredientUnit(purchase, ingredient) {
+  if (!purchase || !ingredient || !Number(purchase.quantity)) return 0
+  const raw = Number(purchase.price) / Number(purchase.quantity)
+  if (purchase.unit === ingredient.unit) return raw
+  const grams = Number(ingredient.estimatedUnitGrams || 0)
+  if (purchase.unit === 'g' && grams > 0 && !['g', 'ml'].includes(ingredient.unit)) return raw * grams
+  if (ingredient.unit === 'g' && grams > 0 && !['g', 'ml'].includes(purchase.unit)) return raw / grams
+  return 0
+}
+
+function unitPrice(ingredientId, purchases, ingredients = []) {
+  const ing = ingredients.find((i) => i.id === ingredientId)
+  if (Number(ing?.manualUnitCost) > 0) return Number(ing.manualUnitCost)
   const p = latestPurchaseFor(ingredientId, purchases)
-  return p ? Number(p.price) / Number(p.quantity) : 0
+  return p ? pricePerIngredientUnit(p, ing) : 0
+}
+
+function ingredientCalories(ingredient, quantity) {
+  if (!ingredient || ingredient.calorieMode === 'exclude') return 0
+  const qty = Number(quantity || 0)
+  if (!qty) return 0
+  const kcal = Number(ingredient.kcalBaseValue || 0)
+  if (!kcal) return 0
+  if (ingredient.calorieMode === 'estimate' && !['g', 'ml'].includes(ingredient.unit)) {
+    const grams = Number(ingredient.estimatedUnitGrams || 0)
+    return grams > 0 ? (qty * grams / 100) * kcal : 0
+  }
+  const base = Math.max(Number(ingredient.kcalBaseQty || 1), 0.0001)
+  return qty / base * kcal
 }
 
 function usageDailyAverage7(ingredientId, usages) {
@@ -104,10 +157,8 @@ function recipeTotals(recipe, ingredients, purchases) {
     const ingredient = ingredients.find((i) => i.id === item.ingredientId)
     if (!ingredient) return acc
     const qty = Number(item.quantity || 0)
-    acc.cost += unitPrice(item.ingredientId, purchases) * qty
-    acc.kcal += Number(ingredient.kcalBaseQty) > 0
-      ? (qty / Number(ingredient.kcalBaseQty)) * Number(ingredient.kcalBaseValue || 0)
-      : 0
+    acc.cost += unitPrice(item.ingredientId, purchases, ingredients) * qty
+    acc.kcal += ingredientCalories(ingredient, qty)
     return acc
   }, { cost: 0, kcal: 0 })
 }
@@ -168,11 +219,11 @@ export default function App() {
         return
       }
       const cloud = {
-        ingredients: ingredients.data.map((x) => normalizeIngredient({ id: x.id, name: x.name, unit: x.unit, kcalBaseQty: x.kcal_base_qty, kcalBaseValue: x.kcal_base_value, category: x.category || '', isPersonal: x.is_personal })),
+        ingredients: ingredients.data.map((x) => normalizeIngredient({ id: x.id, name: x.name, unit: x.unit, kcalBaseQty: x.kcal_base_qty, kcalBaseValue: x.kcal_base_value, category: x.category || '', isPersonal: x.is_personal, calorieMode: x.calorie_mode, estimatedUnitGrams: x.estimated_unit_grams, manualUnitCost: x.manual_unit_cost, isHomemade: x.is_homemade, sourceRecipeId: x.source_recipe_id })),
         purchases: purchases.data.map((x) => ({ id: x.id, ingredientId: x.ingredient_id, date: x.purchased_at, store: x.store || '', quantity: x.quantity, unit: x.unit, price: x.price, createdAt: x.created_at })),
         usages: usages.data.map((x) => normalizeUsage({ id: x.id, ingredientId: x.ingredient_id, date: x.used_at, quantity: x.quantity, unit: x.unit, daysUsed: x.days_used, usageMode: x.usage_mode, wasteIncluded: x.waste_included })),
         recipes: recipes.data.map((r) => ({
-          id: r.id, name: r.name, servings: r.servings || 1,
+          id: r.id, name: r.name, servings: r.servings || 1, outputQty: Number(r.output_qty || 0), outputUnit: r.output_unit || '', createsIngredientId: r.creates_ingredient_id || null,
           items: recipeItems.data.filter((i) => i.recipe_id === r.id).map((i) => ({ id: i.id, ingredientId: i.ingredient_id, quantity: i.quantity, unit: i.unit }))
         })),
         weights: weights.data.map((x) => ({ id: x.id, date: x.measured_at, value: x.weight_kg, note: x.note || '' })),
@@ -209,7 +260,7 @@ export default function App() {
 
   const monthlyEstimate = useMemo(() => data.ingredients.reduce((sum, ing) => {
     if (!ing.isPersonal) return sum
-    return sum + usageDailyAverage7(ing.id, data.usages) * 30 * unitPrice(ing.id, data.purchases)
+    return sum + usageDailyAverage7(ing.id, data.usages) * 30 * unitPrice(ing.id, data.purchases, data.ingredients)
   }, 0), [data.ingredients, data.usages, data.purchases])
 
   const thisMonthSpend = useMemo(() => {
@@ -290,7 +341,8 @@ function Home({ data, monthlyEstimate, thisMonthSpend, latestWeight, firstWeight
 function Ingredients({ data, setData, persist, flash }) {
   const firstId = data.ingredients[0]?.id || ''
   const [usage, setUsage] = useState({ id: '', ingredientId: firstId, quantity: '', daysUsed: 1, date: today(), usageMode: 'direct', wasteIncluded: false })
-  const [ingredientForm, setIngredientForm] = useState({ id: '', name: '', unit: 'g', kcalBaseQty: 100, kcalBaseValue: '', category: '', isPersonal: true })
+  const blankIngredient = { id: '', name: '', unit: 'g', kcalBaseQty: 100, kcalBaseValue: '', category: '', isPersonal: true, calorieMode: 'exact', estimatedUnitGrams: '', manualUnitCost: 0, isHomemade: false, sourceRecipeId: null }
+  const [ingredientForm, setIngredientForm] = useState(blankIngredient)
   const resetUsage = () => setUsage({ id: '', ingredientId: data.ingredients[0]?.id || '', quantity: '', daysUsed: 1, date: today(), usageMode: 'direct', wasteIncluded: false })
   const saveUsage = async (e) => {
     e.preventDefault()
@@ -302,27 +354,35 @@ function Ingredients({ data, setData, persist, flash }) {
     await persist('usage', { id: row.id, ingredient_id: row.ingredientId, used_at: row.date, quantity: row.quantity, unit: row.unit, days_used: row.daysUsed, usage_mode: row.usageMode, waste_included: row.wasteIncluded })
     resetUsage(); flash(usage.id ? '사용 기록을 수정했어요' : '사용 기록을 추가했어요')
   }
-  const editUsage = (row) => setUsage({ ...row })
   const deleteUsage = async (id) => {
     setData((d) => ({ ...d, usages: d.usages.filter((x) => x.id !== id) }))
     await persist('usage', { id }, 'delete')
     if (usage.id === id) resetUsage()
     flash('사용 기록을 삭제했어요')
   }
-
-  const saveIngredient = async (e) => {
-    e.preventDefault(); if (!ingredientForm.name.trim()) return
-    const row = { ...ingredientForm, id: ingredientForm.id || uid(), name: ingredientForm.name.trim(), kcalBaseQty: Number(ingredientForm.kcalBaseQty) || 1, kcalBaseValue: Number(ingredientForm.kcalBaseValue) || 0 }
-    setData((d) => ({ ...d, ingredients: ingredientForm.id ? d.ingredients.map((x) => x.id === row.id ? row : x) : [...d.ingredients, row] }))
-    await persist('ingredient', { id: row.id, name: row.name, unit: row.unit, kcal_base_qty: row.kcalBaseQty, kcal_base_value: row.kcalBaseValue, category: row.category, is_personal: row.isPersonal })
-    setIngredientForm({ id: '', name: '', unit: 'g', kcalBaseQty: 100, kcalBaseValue: '', category: '', isPersonal: true })
-    flash(ingredientForm.id ? '식재료 정보를 수정했어요' : '식재료를 추가했어요')
+  const saveIngredientRow = async (row) => {
+    const clean = normalizeIngredient(row)
+    await persist('ingredient', { id: clean.id, name: clean.name, unit: clean.unit, kcal_base_qty: clean.kcalBaseQty, kcal_base_value: clean.kcalBaseValue, category: clean.category || '', is_personal: clean.isPersonal, calorie_mode: clean.calorieMode, estimated_unit_grams: clean.estimatedUnitGrams || 0, manual_unit_cost: clean.manualUnitCost || 0, is_homemade: clean.isHomemade, source_recipe_id: clean.sourceRecipeId || null })
+    flash(`${clean.name} 정보를 저장했어요`)
   }
-
+  const updateIngredient = (id, patch) => setData((d) => ({ ...d, ingredients: d.ingredients.map((x) => x.id === id ? normalizeIngredient({ ...x, ...patch }) : x) }))
+  const applyPreset = (id) => {
+    const ing = data.ingredients.find((x) => x.id === id); const preset = caloriePresetFor(ing?.name)
+    if (!ing || !preset) return flash('기본 추정치가 없는 재료예요')
+    updateIngredient(id, { calorieMode: 'estimate', kcalBaseQty: 100, kcalBaseValue: preset.kcal100, estimatedUnitGrams: ['g', 'ml'].includes(ing.unit) ? 0 : preset.grams })
+    flash('기본 칼로리 추정치를 채웠어요')
+  }
+  const saveNewIngredient = async (e) => {
+    e.preventDefault(); if (!ingredientForm.name.trim()) return
+    const preset = caloriePresetFor(ingredientForm.name)
+    const row = normalizeIngredient({ ...ingredientForm, id: uid(), name: ingredientForm.name.trim(), calorieMode: ingredientForm.calorieMode, kcalBaseQty: Number(ingredientForm.kcalBaseQty) || 100, kcalBaseValue: Number(ingredientForm.kcalBaseValue) || (preset?.kcal100 ?? 0), estimatedUnitGrams: Number(ingredientForm.estimatedUnitGrams) || (preset && !['g','ml'].includes(ingredientForm.unit) ? preset.grams : 0) })
+    setData((d) => ({ ...d, ingredients: [...d.ingredients, row] })); await saveIngredientRow(row); setIngredientForm(blankIngredient)
+  }
   const recentUsages = [...data.usages].sort((a, b) => `${b.date}${b.id}`.localeCompare(`${a.date}${a.id}`)).slice(0, 8)
+  const sortedIngredients = [...data.ingredients].sort((a,b) => a.name.localeCompare(b.name, 'ko'))
 
   return <div className="pageStack">
-    <section className="panel splitPanel"><div><p className="kicker">USE</p><h2>{usage.id ? '사용 기록 수정' : '사용 / 소진 기록'}</h2><p className="muted">또띠아는 “오늘 2장”, 채소는 “300g 한 봉지를 5일 만에 소진”처럼 기록해요.</p></div>
+    <section className="panel splitPanel"><div><p className="kicker">USE</p><h2>{usage.id ? '사용 기록 수정' : '사용 / 소진 기록'}</h2><p className="muted">개수형은 오늘 사용량, 채소는 한 봉지를 며칠 만에 소진했는지 기록해도 돼요.</p></div>
       <form className="formGrid compactForm" onSubmit={saveUsage}>
         <label>식재료<select value={usage.ingredientId || firstId} onChange={(e) => setUsage({ ...usage, ingredientId: e.target.value })}>{data.ingredients.map((i) => <option value={i.id} key={i.id}>{i.name}</option>)}</select></label>
         <label>기록 방식<select value={usage.usageMode} onChange={(e) => setUsage({ ...usage, usageMode: e.target.value, daysUsed: e.target.value === 'direct' ? 1 : usage.daysUsed })}><option value="direct">오늘 사용한 양</option><option value="depletion">한 봉지 소진</option></select></label>
@@ -335,104 +395,92 @@ function Ingredients({ data, setData, persist, flash }) {
     </section>
 
     <section className="panel"><div className="sectionHead"><div><p className="kicker">HISTORY</p><h2>최근 사용 기록</h2></div><span className="countPill">최근 {recentUsages.length}건</span></div>
-      {recentUsages.length ? <div className="usageList">{recentUsages.map((u) => { const ing = data.ingredients.find((i) => i.id === u.ingredientId); return <article className="usageRow" key={u.id}><div><strong>{ing?.name || '삭제된 재료'}</strong><span>{u.date} · {u.usageMode === 'depletion' ? `${number(u.quantity, 1)}${u.unit} / ${u.daysUsed}일 소진${u.wasteIncluded ? ' · 폐기 포함' : ''}` : `${number(u.quantity, 1)}${u.unit} 사용`}</span></div><div className="rowActions"><button className="smallButton" onClick={() => editUsage(u)}>수정</button><button className="smallButton danger" onClick={() => deleteUsage(u.id)}>삭제</button></div></article> })}</div> : <Empty text="사용 기록이 아직 없어요." />}
+      {recentUsages.length ? <div className="usageList">{recentUsages.map((u) => { const ing = data.ingredients.find((i) => i.id === u.ingredientId); return <article className="usageRow" key={u.id}><div><strong>{ing?.name || '삭제된 재료'}</strong><span>{u.date} · {u.usageMode === 'depletion' ? `${number(u.quantity, 1)}${u.unit} / ${u.daysUsed}일 소진${u.wasteIncluded ? ' · 폐기 포함' : ''}` : `${number(u.quantity, 1)}${u.unit} 사용`}</span></div><div className="rowActions"><button className="smallButton" onClick={() => setUsage({ ...u })}>수정</button><button className="smallButton danger" onClick={() => deleteUsage(u.id)}>삭제</button></div></article> })}</div> : <Empty text="사용 기록이 아직 없어요." />}
     </section>
 
-    <section className="panel"><div className="sectionHead"><div><p className="kicker">PANTRY</p><h2>식재료 현황</h2></div><span className="countPill">{data.ingredients.length}개</span></div>
-      <div className="ingredientGrid">{data.ingredients.map((ing) => {
-        const latest = latestPurchaseFor(ing.id, data.purchases); const per = unitPrice(ing.id, data.purchases); const daily = usageDailyAverage7(ing.id, data.usages); const todayQty = todayUsage(ing.id, data.usages); const monthly = ing.isPersonal ? daily * 30 * per : 0
-        return <article className="ingredientCard" key={ing.id}><div className="ingredientTitle"><div><span>{ing.isPersonal ? '내 식단' : '구매 기록만'}{ing.category ? ` · ${ing.category}` : ''}</span><h3>{ing.name}</h3></div><button className="smallButton" onClick={() => setIngredientForm({ ...ing })}>관리</button></div>
-          <dl><div><dt>오늘 사용</dt><dd>{todayQty ? `${number(todayQty, 1)}${ing.unit}` : '-'}</dd></div><div><dt>최근 7일 평균</dt><dd>{daily ? `${number(daily, 1)}${ing.unit}/일` : '-'}</dd></div><div><dt>{ing.isPersonal ? '최근 단가' : '비용 계산'}</dt><dd>{ing.isPersonal ? (per ? `${money(per)}/${ing.unit}` : '구매 기록 없음') : '제외'}</dd></div><div><dt>월 예상</dt><dd className="roseText">{ing.isPersonal && monthly ? money(monthly) : '-'}</dd></div></dl>
-          {latest && <p className="cardFoot">최근 구매 · {latest.store || '구매처 미입력'} · {latest.date}</p>}
-        </article>
-      })}</div>
+    <section className="panel"><div className="sectionHead"><div><p className="kicker">PANTRY</p><h2>식재료 관리표</h2></div><span className="countPill">{data.ingredients.length}개</span></div>
+      <p className="muted manageHint">표에서 바로 바꾸고 각 행의 저장을 누르면 돼요. 월 예상은 최근 7일 사용량과 최신 단가로 자동 계산돼요.</p>
+      <div className="ingredientTableWrap"><table className="ingredientTable"><thead><tr><th>식재료</th><th>내 식단</th><th>단위</th><th>최근 단가</th><th>오늘</th><th>7일 평균</th><th>월 예상</th><th>kcal 방식</th><th>100g/기준 kcal</th><th>대표무게</th><th></th></tr></thead><tbody>
+        {sortedIngredients.map((ing) => { const per = unitPrice(ing.id, data.purchases, data.ingredients); const daily = usageDailyAverage7(ing.id, data.usages); const todayQty = todayUsage(ing.id, data.usages); const monthly = ing.isPersonal ? daily * 30 * per : 0; const preset = caloriePresetFor(ing.name); return <tr key={ing.id}>
+          <td><div className="tableName"><strong>{ing.name}</strong>{ing.isHomemade && <small>직접 만든 완제품</small>}</div></td>
+          <td><input type="checkbox" checked={ing.isPersonal} onChange={(e) => updateIngredient(ing.id,{isPersonal:e.target.checked})} /></td>
+          <td><select value={ing.unit} disabled={ing.isHomemade} onChange={(e)=>updateIngredient(ing.id,{unit:e.target.value})}>{['g','ml','개','장','팩','봉','줌'].map(u=><option key={u}>{u}</option>)}</select></td>
+          <td>{per ? `${money(per)}/${ing.unit}` : '-'}</td><td>{todayQty ? `${number(todayQty,1)}${ing.unit}` : '-'}</td><td>{daily ? `${number(daily,1)}${ing.unit}` : '-'}</td><td className="roseText">{monthly ? money(monthly) : '-'}</td>
+          <td><select value={ing.calorieMode} onChange={(e)=>updateIngredient(ing.id,{calorieMode:e.target.value})}><option value="exact">정확</option><option value="estimate">간편추정</option><option value="exclude">제외</option></select>{preset && !ing.isHomemade && <button type="button" className="tinyLink" onClick={()=>applyPreset(ing.id)}>기본값</button>}</td>
+          <td><input className="tableInput" type="number" step="0.1" value={ing.kcalBaseValue || ''} disabled={ing.calorieMode==='exclude' || ing.isHomemade} onChange={(e)=>updateIngredient(ing.id,{kcalBaseValue:e.target.value,kcalBaseQty:ing.calorieMode==='estimate'?100:ing.kcalBaseQty})} /><small>{ing.calorieMode==='estimate'?' /100g':` /${ing.kcalBaseQty}${ing.unit}`}</small></td>
+          <td>{ing.calorieMode==='estimate' && !['g','ml'].includes(ing.unit) ? <div className="inlineCell"><input className="tableInput" type="number" step="0.1" value={ing.estimatedUnitGrams || ''} onChange={(e)=>updateIngredient(ing.id,{estimatedUnitGrams:e.target.value})}/><small>g/{ing.unit}</small></div> : '-'}</td>
+          <td><button className="smallButton" onClick={()=>saveIngredientRow(ing)}>저장</button></td>
+        </tr>})}
+      </tbody></table></div>
     </section>
 
-    <section className="panel"><div className="sectionHead"><div><p className="kicker">MANAGE</p><h2>{ingredientForm.id ? `${ingredientForm.name} 관리` : '식재료 직접 추가 / 관리'}</h2></div></div>
-      <p className="muted manageHint">보통은 구매 탭에서 새 재료가 자동 생성돼요. 여기서는 칼로리, 분류, 내 식단 포함 여부를 고쳐요.</p>
-      <form className="formGrid" onSubmit={saveIngredient}>
-        <label>이름<input value={ingredientForm.name} onChange={(e) => setIngredientForm({ ...ingredientForm, name: e.target.value })} placeholder="예: 또띠아" /></label>
-        <label>기준 단위<select value={ingredientForm.unit} onChange={(e) => setIngredientForm({ ...ingredientForm, unit: e.target.value, kcalBaseQty: ['g', 'ml'].includes(e.target.value) ? 100 : 1 })}>{['g', 'ml', '개', '장', '팩', '봉'].map((u) => <option key={u}>{u}</option>)}</select></label>
-        <label>칼로리 기준량<input type="number" step="0.1" value={ingredientForm.kcalBaseQty} onChange={(e) => setIngredientForm({ ...ingredientForm, kcalBaseQty: e.target.value })} /></label>
-        <label>기준 kcal<input type="number" step="0.1" value={ingredientForm.kcalBaseValue} onChange={(e) => setIngredientForm({ ...ingredientForm, kcalBaseValue: e.target.value })} placeholder="모르면 0" /></label>
-        <label>분류<input value={ingredientForm.category} onChange={(e) => setIngredientForm({ ...ingredientForm, category: e.target.value })} placeholder="채소, 단백질…" /></label>
-        <label className="checkLabel"><input type="checkbox" checked={ingredientForm.isPersonal} onChange={(e) => setIngredientForm({ ...ingredientForm, isPersonal: e.target.checked })} /><span>내 식단 원가 · 예상비용에 포함</span></label>
-        <div className="inlineActions"><button className="primaryButton" type="submit">{ingredientForm.id ? '정보 수정' : '직접 추가'}</button>{ingredientForm.id && <button className="secondaryButton" type="button" onClick={() => setIngredientForm({ id: '', name: '', unit: 'g', kcalBaseQty: 100, kcalBaseValue: '', category: '', isPersonal: true })}>취소</button>}</div>
-      </form>
+    <section className="panel"><div className="sectionHead"><div><p className="kicker">ADD</p><h2>식재료 직접 추가</h2></div></div><p className="muted manageHint">보통은 구매 탭에서 자동 생성돼요. 여기서는 구매 없이 재료를 미리 만들 때만 써요.</p>
+      <form className="formGrid" onSubmit={saveNewIngredient}><label>이름<input value={ingredientForm.name} onChange={(e)=>setIngredientForm({...ingredientForm,name:e.target.value})} placeholder="예: 청양고추" /></label><label>기준 단위<select value={ingredientForm.unit} onChange={(e)=>setIngredientForm({...ingredientForm,unit:e.target.value})}>{['g','ml','개','장','팩','봉','줌'].map(u=><option key={u}>{u}</option>)}</select></label><label>분류<input value={ingredientForm.category} onChange={(e)=>setIngredientForm({...ingredientForm,category:e.target.value})} placeholder="채소, 단백질…" /></label><label className="checkLabel"><input type="checkbox" checked={ingredientForm.isPersonal} onChange={(e)=>setIngredientForm({...ingredientForm,isPersonal:e.target.checked})}/><span>내 식단에 포함</span></label><button className="primaryButton" type="submit">직접 추가</button></form>
     </section>
   </div>
 }
 
 function Purchases({ data, setData, persist, flash }) {
-  const [form, setForm] = useState({ name: '', date: today(), store: '', quantity: '', unit: 'g', price: '', isPersonal: true })
+  const blank = { id: '', name: '', date: today(), store: '', quantity: '', unit: 'g', price: '', isPersonal: true }
+  const [form, setForm] = useState(blank)
   const findExisting = (name) => data.ingredients.find((i) => i.name.trim().toLowerCase() === name.trim().toLowerCase())
   const nameList = [...data.ingredients].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  const reset = () => setForm(blank)
 
-  const add = async (e) => {
-    e.preventDefault()
-    if (!form.name.trim() || !Number(form.quantity) || !Number(form.price)) return
+  const save = async (e) => {
+    e.preventDefault(); if (!form.name.trim() || !Number(form.quantity) || !Number(form.price)) return
     let ing = findExisting(form.name)
     if (!ing) {
-      ing = { id: uid(), name: form.name.trim(), unit: form.unit, kcalBaseQty: ['g', 'ml'].includes(form.unit) ? 100 : 1, kcalBaseValue: 0, category: '', isPersonal: form.isPersonal }
-      setData((d) => ({ ...d, ingredients: [...d.ingredients, ing] }))
-      await persist('ingredient', { id: ing.id, name: ing.name, unit: ing.unit, kcal_base_qty: ing.kcalBaseQty, kcal_base_value: 0, category: '', is_personal: ing.isPersonal })
-    } else if (form.isPersonal && !ing.isPersonal) {
-      ing = { ...ing, isPersonal: true }
-      setData((d) => ({ ...d, ingredients: d.ingredients.map((x) => x.id === ing.id ? ing : x) }))
-      await persist('ingredient', { id: ing.id, name: ing.name, unit: ing.unit, kcal_base_qty: ing.kcalBaseQty, kcal_base_value: ing.kcalBaseValue, category: ing.category || '', is_personal: true })
+      const preset = caloriePresetFor(form.name)
+      ing = normalizeIngredient({ id: uid(), name: form.name.trim(), unit: preset?.unit || form.unit, kcalBaseQty: preset ? 100 : (['g','ml'].includes(form.unit)?100:1), kcalBaseValue: preset?.kcal100 || 0, category: '', isPersonal: form.isPersonal, calorieMode: preset ? 'estimate' : 'exact', estimatedUnitGrams: preset && !['g','ml'].includes(preset.unit) ? preset.grams : 0 })
+      setData((d)=>({...d,ingredients:[...d.ingredients,ing]}))
+      await persist('ingredient',{id:ing.id,name:ing.name,unit:ing.unit,kcal_base_qty:ing.kcalBaseQty,kcal_base_value:ing.kcalBaseValue,category:'',is_personal:ing.isPersonal,calorie_mode:ing.calorieMode,estimated_unit_grams:ing.estimatedUnitGrams,manual_unit_cost:0,is_homemade:false,source_recipe_id:null})
+    } else if (ing.isPersonal !== form.isPersonal) {
+      ing={...ing,isPersonal:form.isPersonal}; setData((d)=>({...d,ingredients:d.ingredients.map(x=>x.id===ing.id?ing:x)})); await persist('ingredient',{id:ing.id,name:ing.name,unit:ing.unit,kcal_base_qty:ing.kcalBaseQty,kcal_base_value:ing.kcalBaseValue,category:ing.category||'',is_personal:ing.isPersonal,calorie_mode:ing.calorieMode,estimated_unit_grams:ing.estimatedUnitGrams||0,manual_unit_cost:ing.manualUnitCost||0,is_homemade:ing.isHomemade,source_recipe_id:ing.sourceRecipeId||null})
     }
-    const row = { id: uid(), ingredientId: ing.id, date: form.date, store: form.store, quantity: Number(form.quantity), price: Number(form.price), unit: ing.unit, createdAt: new Date().toISOString() }
-    setData((d) => ({ ...d, purchases: [row, ...d.purchases] }))
-    await persist('purchase', { id: row.id, ingredient_id: row.ingredientId, purchased_at: row.date, store: row.store, quantity: row.quantity, unit: row.unit, price: row.price })
-    setForm((f) => ({ ...f, name: '', store: '', quantity: '', price: '', unit: 'g', isPersonal: true }))
-    flash('구매를 기록했어요')
+    const old = form.id ? data.purchases.find((x)=>x.id===form.id) : null
+    const row = { id: form.id || uid(), ingredientId: ing.id, date: form.date, store: form.store, quantity:Number(form.quantity), price:Number(form.price), unit:form.unit, createdAt:old?.createdAt || new Date().toISOString() }
+    setData((d)=>({...d,purchases:form.id?d.purchases.map(x=>x.id===row.id?row:x):[row,...d.purchases]}))
+    await persist('purchase',{id:row.id,ingredient_id:row.ingredientId,purchased_at:row.date,store:row.store,quantity:row.quantity,unit:row.unit,price:row.price})
+    flash(form.id?'구매 기록을 수정했어요':'구매를 기록했어요'); reset()
   }
+  const edit = (p) => { const ing=data.ingredients.find(i=>i.id===p.ingredientId); setForm({id:p.id,name:ing?.name||'',date:p.date,store:p.store||'',quantity:p.quantity,unit:p.unit,price:p.price,isPersonal:ing?.isPersonal??true}); window.scrollTo({top:0,behavior:'smooth'}) }
+  const remove = async (id) => { setData((d)=>({...d,purchases:d.purchases.filter(x=>x.id!==id)})); await persist('purchase',{id},'delete'); if(form.id===id) reset(); flash('구매 기록을 삭제했어요') }
+  const onNameChange = (value) => { const existing=findExisting(value); setForm((f)=>({...f,name:value,isPersonal:existing?.isPersonal??f.isPersonal})) }
+  const sorted=[...data.purchases].sort((a,b)=>`${b.date}${b.createdAt||''}`.localeCompare(`${a.date}${a.createdAt||''}`))
 
-  const onNameChange = (value) => {
-    const existing = findExisting(value)
-    setForm((f) => ({ ...f, name: value, unit: existing?.unit || f.unit, isPersonal: existing?.isPersonal ?? f.isPersonal }))
-  }
-  const sorted = [...data.purchases].sort((a, b) => `${b.date}${b.createdAt || ''}`.localeCompare(`${a.date}${a.createdAt || ''}`))
-
-  return <div className="pageStack">
-    <section className="panel accentPanel"><div><p className="kicker">SHOPPING</p><h2>오늘 산 것 바로 기록</h2><p className="muted">처음 사는 재료면 식재료 목록에 자동으로 만들어져요. 가족 장보기도 함께 기록할 수 있어요.</p></div>
-      <form className="formGrid purchaseFirst" onSubmit={add}>
-        <label>품목 이름<input list="ingredientNames" value={form.name} onChange={(e) => onNameChange(e.target.value)} placeholder="예: 깻잎" /><datalist id="ingredientNames">{nameList.map((i) => <option value={i.name} key={i.id} />)}</datalist></label>
-        <label>구매량<input type="number" step="0.1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} placeholder="예: 300" /></label>
-        <label>단위<select value={form.unit} disabled={Boolean(findExisting(form.name))} onChange={(e) => setForm({ ...form, unit: e.target.value })}>{['g', 'ml', '개', '장', '팩', '봉'].map((u) => <option key={u}>{u}</option>)}</select></label>
-        <label>결제 금액<input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="예: 4500" /></label>
-        <label>구매처<input value={form.store} onChange={(e) => setForm({ ...form, store: e.target.value })} placeholder="쿠팡, 코스트코…" /></label>
-        <label>구매일<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-        <label className="checkLabel"><input type="checkbox" checked={form.isPersonal} onChange={(e) => setForm({ ...form, isPersonal: e.target.checked })} /><span>내 식단에 쓰는 재료</span></label>
-        <button className="primaryButton" type="submit">구매 기록 추가</button>
-      </form>
-    </section>
-    <section className="panel"><div className="sectionHead"><div><p className="kicker">HISTORY</p><h2>구매 일지</h2></div><span className="countPill">{sorted.length}건</span></div>
-      {sorted.length ? <div className="purchaseList">{sorted.map((p) => { const ing = data.ingredients.find((i) => i.id === p.ingredientId); const per = Number(p.price) / Number(p.quantity); return <article className="purchaseRow" key={p.id}><div className="dateBadge"><b>{p.date.slice(8, 10)}</b><span>{p.date.slice(5, 7)}월</span></div><div className="purchaseMain"><h3>{ing?.name || '삭제된 재료'} {ing?.isPersonal && <em className="mineTag">내 식단</em>}</h3><p>{p.store || '구매처 미입력'} · {number(p.quantity, 1)}{p.unit}</p><small>{ing?.isPersonal ? `${p.unit}당 ${money(per)}` : '구매 이력만 기록 · 내 식비 계산 제외'}</small></div><strong>{money(p.price)}</strong><button className="miniDelete" onClick={async () => { setData((d) => ({ ...d, purchases: d.purchases.filter((x) => x.id !== p.id) })); await persist('purchase', { id: p.id }, 'delete'); flash('구매 기록을 삭제했어요') }}>×</button></article> })}</div> : <Empty text="구매 기록을 추가해 주세요." />}
-    </section>
-  </div>
+  return <div className="pageStack"><section className="panel accentPanel"><div><p className="kicker">SHOPPING</p><h2>{form.id?'구매 기록 수정':'오늘 산 것 바로 기록'}</h2><p className="muted">새 품목은 식재료 목록에 자동 생성돼요. 가격이 오른 건 과거 기록을 고치지 말고 다음 구매로 새로 남기면 가격 이력이 보존돼요.</p></div>
+    <form className="formGrid purchaseFirst" onSubmit={save}><label>품목 이름<input list="ingredientNames" value={form.name} onChange={(e)=>onNameChange(e.target.value)} placeholder="예: 깻잎"/><datalist id="ingredientNames">{nameList.map(i=><option value={i.name} key={i.id}/>)}</datalist></label><label>구매량<input type="number" step="0.1" value={form.quantity} onChange={(e)=>setForm({...form,quantity:e.target.value})}/></label><label>구매 단위<select value={form.unit} onChange={(e)=>setForm({...form,unit:e.target.value})}>{['g','ml','개','장','팩','봉','줌'].map(u=><option key={u}>{u}</option>)}</select></label><label>결제 금액<input type="number" value={form.price} onChange={(e)=>setForm({...form,price:e.target.value})}/></label><label>구매처<input value={form.store} onChange={(e)=>setForm({...form,store:e.target.value})}/></label><label>구매일<input type="date" value={form.date} onChange={(e)=>setForm({...form,date:e.target.value})}/></label><label className="checkLabel"><input type="checkbox" checked={form.isPersonal} onChange={(e)=>setForm({...form,isPersonal:e.target.checked})}/><span>내 식단에 쓰는 재료</span></label><div className="inlineActions"><button className="primaryButton" type="submit">{form.id?'수정 저장':'구매 기록 추가'}</button>{form.id&&<button type="button" className="secondaryButton" onClick={reset}>취소</button>}</div></form>
+  </section>
+  <section className="panel"><div className="sectionHead"><div><p className="kicker">HISTORY</p><h2>구매 일지</h2></div><span className="countPill">{sorted.length}건</span></div>{sorted.length?<div className="purchaseList">{sorted.map((p)=>{const ing=data.ingredients.find(i=>i.id===p.ingredientId);const per=pricePerIngredientUnit(p,ing);return <article className="purchaseRow purchaseEditable" key={p.id}><div className="dateBadge"><b>{p.date.slice(8,10)}</b><span>{p.date.slice(5,7)}월</span></div><div className="purchaseMain"><h3>{ing?.name||'삭제된 재료'} {ing?.isPersonal&&<em className="mineTag">내 식단</em>}</h3><p>{p.store||'구매처 미입력'} · {number(p.quantity,1)}{p.unit}</p><small>{ing?.isPersonal?(per?`${ing.unit}당 약 ${money(per)}`:'단위 환산 정보 필요'):'구매 이력만 기록 · 내 식비 계산 제외'}</small></div><strong>{money(p.price)}</strong><div className="rowActions"><button className="smallButton" onClick={()=>edit(p)}>수정</button><button className="smallButton danger" onClick={()=>remove(p.id)}>삭제</button></div></article>})}</div>:<Empty text="구매 기록을 추가해 주세요."/>}</section></div>
 }
 
 function Recipes({ data, setData, persist, flash }) {
-  const personalIngredients = data.ingredients.filter((i) => i.isPersonal)
-  const firstId = personalIngredients[0]?.id || ''
-  const [name, setName] = useState(''); const [servings, setServings] = useState(1); const [items, setItems] = useState([{ id: uid(), ingredientId: firstId, quantity: '' }])
-  const totals = recipeTotals({ items }, data.ingredients, data.purchases)
-  const addItem = () => setItems([...items, { id: uid(), ingredientId: firstId, quantity: '' }])
-  const save = async (e) => {
-    e.preventDefault(); if (!name.trim()) return
-    const rid = uid(); const clean = items.filter((i) => i.ingredientId && Number(i.quantity)).map((i) => { const ing = data.ingredients.find((x) => x.id === i.ingredientId); return { ...i, quantity: Number(i.quantity), unit: ing?.unit || 'g' } })
-    const recipe = { id: rid, name: name.trim(), servings: Number(servings) || 1, items: clean }
-    setData((d) => ({ ...d, recipes: [...d.recipes, recipe] })); await persist('recipe', { id: rid, name: recipe.name, servings: recipe.servings }); for (const item of clean) await persist('recipeItem', { id: item.id, recipe_id: rid, ingredient_id: item.ingredientId, quantity: item.quantity, unit: item.unit })
-    setName(''); setItems([{ id: uid(), ingredientId: firstId, quantity: '' }]); flash('레시피를 저장했어요')
+  const personalIngredients=data.ingredients.filter(i=>i.isPersonal)
+  const firstId=personalIngredients[0]?.id||''
+  const [name,setName]=useState(''); const [servings,setServings]=useState(1); const [items,setItems]=useState([{id:uid(),ingredientId:firstId,quantity:''}]); const [makeProduct,setMakeProduct]=useState(false); const [outputQty,setOutputQty]=useState(''); const [outputUnit,setOutputUnit]=useState('g')
+  const totals=recipeTotals({items},data.ingredients,data.purchases)
+  const addItem=()=>setItems([...items,{id:uid(),ingredientId:firstId,quantity:''}])
+  const save=async(e)=>{
+    e.preventDefault(); if(!name.trim()) return
+    const clean=items.filter(i=>i.ingredientId&&Number(i.quantity)).map(i=>{const ing=data.ingredients.find(x=>x.id===i.ingredientId);return {...i,quantity:Number(i.quantity),unit:ing?.unit||'g'}})
+    if(makeProduct&&(!Number(outputQty)||!outputUnit)) return flash('완제품의 완성량을 입력해 주세요')
+    const rid=uid(); let product=null
+    if(makeProduct){
+      const q=Number(outputQty); product=normalizeIngredient({id:uid(),name:name.trim(),unit:outputUnit,kcalBaseQty:outputUnit==='g'?100:1,kcalBaseValue:outputUnit==='g'?(totals.kcal/q*100):(totals.kcal/q),category:'직접 만든 음식',isPersonal:true,calorieMode:'exact',estimatedUnitGrams:0,manualUnitCost:totals.cost/q,isHomemade:true,sourceRecipeId:rid})
+    }
+    const recipe={id:rid,name:name.trim(),servings:Number(servings)||1,items:clean,outputQty:makeProduct?Number(outputQty):0,outputUnit:makeProduct?outputUnit:'',createsIngredientId:product?.id||null}
+    setData(d=>({...d,recipes:[...d.recipes,recipe],ingredients:product?[...d.ingredients,product]:d.ingredients}))
+    await persist('recipe',{id:rid,name:recipe.name,servings:recipe.servings,output_qty:recipe.outputQty,output_unit:recipe.outputUnit,creates_ingredient_id:recipe.createsIngredientId})
+    for(const item of clean) await persist('recipeItem',{id:item.id,recipe_id:rid,ingredient_id:item.ingredientId,quantity:item.quantity,unit:item.unit})
+    if(product) await persist('ingredient',{id:product.id,name:product.name,unit:product.unit,kcal_base_qty:product.kcalBaseQty,kcal_base_value:product.kcalBaseValue,category:product.category,is_personal:true,calorie_mode:'exact',estimated_unit_grams:0,manual_unit_cost:product.manualUnitCost,is_homemade:true,source_recipe_id:rid})
+    setName('');setItems([{id:uid(),ingredientId:firstId,quantity:''}]);setMakeProduct(false);setOutputQty('');setOutputUnit('g');flash(product?'레시피와 완제품을 저장했어요':'레시피를 저장했어요')
   }
-  return <div className="pageStack"><section className="panel recipeBuilder"><div className="sectionHead"><div><p className="kicker">RECIPE</p><h2>내 음식 원가 · 칼로리</h2></div><div className="liveTotals"><span>{money(totals.cost)}</span><b>{number(totals.kcal, 0)} kcal</b></div></div>
-    <p className="muted manageHint">‘내 식단’으로 표시된 재료만 선택돼요. 칼로리는 식재료 관리에서 기준값을 넣으면 자동 계산돼요.</p>
-    {personalIngredients.length ? <form onSubmit={save}><div className="formGrid twoCols"><label>레시피 이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 불고기 또띠아랩" /></label><label>몇 인분<input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} /></label></div>
-      <div className="recipeItems">{items.map((item) => <div className="recipeItem" key={item.id}><select value={item.ingredientId} onChange={(e) => setItems(items.map((x) => x.id === item.id ? { ...x, ingredientId: e.target.value } : x))}>{personalIngredients.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</select><input type="number" step="0.1" value={item.quantity} onChange={(e) => setItems(items.map((x) => x.id === item.id ? { ...x, quantity: e.target.value } : x))} placeholder="사용량" /><span>{data.ingredients.find((i) => i.id === item.ingredientId)?.unit}</span><button type="button" className="miniDelete" onClick={() => setItems(items.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
-      <div className="formActions"><button className="secondaryButton" type="button" onClick={addItem}>재료 추가</button><button className="primaryButton" type="submit">레시피 저장</button></div></form> : <Empty text="구매 기록에서 ‘내 식단’ 재료를 먼저 추가해 주세요." />}
-  </section>
-  <section className="panel"><div className="sectionHead"><div><p className="kicker">MY RECIPES</p><h2>저장된 레시피</h2></div></div>{data.recipes.length ? <div className="recipeGrid">{data.recipes.map((r) => { const t = recipeTotals(r, data.ingredients, data.purchases); return <article className="recipeCard" key={r.id}><div><span>{r.servings}인분</span><h3>{r.name}</h3></div><div className="recipeNumbers"><strong>{money(t.cost)}</strong><b>{number(t.kcal, 0)} kcal</b></div><p>1인분 약 {money(t.cost / Math.max(1, r.servings))} · {number(t.kcal / Math.max(1, r.servings), 0)} kcal</p></article> })}</div> : <Empty text="첫 레시피를 만들어 보세요." />}</section></div>
+  return <div className="pageStack"><section className="panel recipeBuilder"><div className="sectionHead"><div><p className="kicker">RECIPE</p><h2>내 음식 원가 · 칼로리</h2></div><div className="liveTotals"><span>{money(totals.cost)}</span><b>{number(totals.kcal,0)} kcal</b></div></div><p className="muted manageHint">식재료의 최신 단가와 kcal 기준으로 자동 계산해요. 직접 만든 페스토 같은 건 완제품으로 저장할 수 있어요.</p>
+    {personalIngredients.length?<form onSubmit={save}><div className="formGrid twoCols"><label>레시피 이름<input value={name} onChange={(e)=>setName(e.target.value)} placeholder="예: 깻잎 페스토"/></label><label>몇 인분<input type="number" min="1" value={servings} onChange={(e)=>setServings(e.target.value)}/></label></div><div className="recipeItems">{items.map(item=><div className="recipeItem" key={item.id}><select value={item.ingredientId} onChange={(e)=>setItems(items.map(x=>x.id===item.id?{...x,ingredientId:e.target.value}:x))}>{personalIngredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select><input type="number" step="0.1" value={item.quantity} onChange={(e)=>setItems(items.map(x=>x.id===item.id?{...x,quantity:e.target.value}:x))} placeholder="사용량"/><span>{data.ingredients.find(i=>i.id===item.ingredientId)?.unit}</span><button type="button" className="miniDelete" onClick={()=>setItems(items.filter(x=>x.id!==item.id))}>×</button></div>)}</div>
+      <div className="productBox"><label className="checkLabel"><input type="checkbox" checked={makeProduct} onChange={(e)=>setMakeProduct(e.target.checked)}/><span>이 레시피를 완제품 식재료로도 저장</span></label>{makeProduct&&<div className="productFields"><label>완성량<input type="number" step="0.1" value={outputQty} onChange={(e)=>setOutputQty(e.target.value)} placeholder="예: 250"/></label><label>단위<select value={outputUnit} onChange={(e)=>setOutputUnit(e.target.value)}>{['g','ml','개','장','팩','봉'].map(u=><option key={u}>{u}</option>)}</select></label><p>{Number(outputQty)>0?`완제품 ${outputUnit}당 원가 ${money(totals.cost/Number(outputQty))} · ${outputUnit==='g'?`100g당 ${number(totals.kcal/Number(outputQty)*100,0)} kcal`:`${outputUnit}당 ${number(totals.kcal/Number(outputQty),0)} kcal`}`:'완성된 총 무게나 개수를 넣으면 단가와 kcal를 자동 환산해요.'}</p></div>}</div>
+      <div className="formActions"><button className="secondaryButton" type="button" onClick={addItem}>재료 추가</button><button className="primaryButton" type="submit">레시피 저장</button></div></form>:<Empty text="구매 기록에서 ‘내 식단’ 재료를 먼저 추가해 주세요."/>}
+  </section><section className="panel"><div className="sectionHead"><div><p className="kicker">MY RECIPES</p><h2>저장된 레시피</h2></div></div>{data.recipes.length?<div className="recipeGrid">{data.recipes.map(r=>{const t=recipeTotals(r,data.ingredients,data.purchases);return <article className="recipeCard" key={r.id}><div><span>{r.servings}인분 {r.createsIngredientId?'· 완제품 저장':''}</span><h3>{r.name}</h3></div><div className="recipeNumbers"><strong>{money(t.cost)}</strong><b>{number(t.kcal,0)} kcal</b></div><p>1인분 약 {money(t.cost/Math.max(1,r.servings))} · {number(t.kcal/Math.max(1,r.servings),0)} kcal{r.outputQty?` · 완성 ${number(r.outputQty,1)}${r.outputUnit}`:''}</p></article>})}</div>:<Empty text="첫 레시피를 만들어 보세요."/>}</section></div>
 }
 
 function Weight({ data, setData, persist, flash }) {
