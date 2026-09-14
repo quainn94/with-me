@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import './App.css'
 
-const VERSION = '0.3.0'
-const LOCAL_KEY = 'with-me-life-v0.3'
-const LEGACY_LOCAL_KEY = 'with-me-life-v0.2'
-const LEGACY_LOCAL_KEY_2 = 'with-me-life-v0.1'
+const VERSION = '0.4.0'
+const LOCAL_KEY = 'with-me-life-v0.4'
+const LEGACY_LOCAL_KEY = 'with-me-life-v0.3'
+const LEGACY_LOCAL_KEY_2 = 'with-me-life-v0.2'
+const LEGACY_LOCAL_KEY_3 = 'with-me-life-v0.1'
 const today = () => new Date().toISOString().slice(0, 10)
 const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 const money = (n = 0) => `${Math.round(Number(n) || 0).toLocaleString('ko-KR')}원`
@@ -13,7 +14,7 @@ const number = (n = 0, digits = 0) => Number(n || 0).toLocaleString('ko-KR', { m
 const round1 = (n = 0) => Math.round((Number(n) || 0) * 10) / 10
 const dateKey = (value) => new Date(`${value}T12:00:00`)
 
-const defaultState = { ingredients: [], purchases: [], usages: [], recipes: [], weights: [] }
+const defaultState = { ingredients: [], purchases: [], usages: [], recipes: [], recipeLogs: [], weights: [] }
 
 
 const CALORIE_PRESETS = [
@@ -53,6 +54,7 @@ const normalizeUsage = (x) => ({
   daysUsed: Number(x?.daysUsed ?? x?.days_used ?? 1),
   usageMode: x?.usageMode ?? x?.usage_mode ?? (Number(x?.daysUsed ?? x?.days_used ?? 1) > 1 ? 'depletion' : 'direct'),
   wasteIncluded: Boolean(x?.wasteIncluded ?? x?.waste_included ?? false),
+  sourceRecipeLogId: x?.sourceRecipeLogId ?? x?.source_recipe_log_id ?? null,
 })
 
 const normalizeState = (raw) => ({
@@ -60,12 +62,13 @@ const normalizeState = (raw) => ({
   purchases: Array.isArray(raw?.purchases) ? raw.purchases : [],
   usages: Array.isArray(raw?.usages) ? raw.usages.map(normalizeUsage) : [],
   recipes: Array.isArray(raw?.recipes) ? raw.recipes : [],
+  recipeLogs: Array.isArray(raw?.recipeLogs) ? raw.recipeLogs : [],
   weights: Array.isArray(raw?.weights) ? raw.weights : [],
 })
 
 function loadLocal() {
   try {
-    const saved = localStorage.getItem(LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY_2)
+    const saved = localStorage.getItem(LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY) || localStorage.getItem(LEGACY_LOCAL_KEY_2) || localStorage.getItem(LEGACY_LOCAL_KEY_3)
     return saved ? normalizeState(JSON.parse(saved)) : defaultState
   } catch {
     return defaultState
@@ -202,16 +205,17 @@ export default function App() {
     const loadCloud = async () => {
       setSyncState('불러오는 중')
       const userId = session.user.id
-      const [ingredients, purchases, usages, recipes, recipeItems, weights] = await Promise.all([
+      const [ingredients, purchases, usages, recipes, recipeItems, recipeLogs, weights] = await Promise.all([
         supabase.from('life_ingredients').select('*').eq('user_id', userId).order('created_at'),
         supabase.from('life_purchases').select('*').eq('user_id', userId).order('purchased_at', { ascending: false }),
         supabase.from('life_usages').select('*').eq('user_id', userId).order('used_at', { ascending: false }),
         supabase.from('life_recipes').select('*').eq('user_id', userId).order('created_at'),
         supabase.from('life_recipe_items').select('*').eq('user_id', userId),
+        supabase.from('life_recipe_logs').select('*').eq('user_id', userId).order('planned_at', { ascending: false }),
         supabase.from('life_weights').select('*').eq('user_id', userId).order('measured_at'),
       ])
       if (cancelled) return
-      const anyError = [ingredients, purchases, usages, recipes, recipeItems, weights].find((r) => r.error)
+      const anyError = [ingredients, purchases, usages, recipes, recipeItems, recipeLogs, weights].find((r) => r.error)
       if (anyError) {
         console.warn('v0.2 tables not ready:', anyError.error)
         setCloudEnabled(false)
@@ -221,11 +225,12 @@ export default function App() {
       const cloud = {
         ingredients: ingredients.data.map((x) => normalizeIngredient({ id: x.id, name: x.name, unit: x.unit, kcalBaseQty: x.kcal_base_qty, kcalBaseValue: x.kcal_base_value, category: x.category || '', isPersonal: x.is_personal, calorieMode: x.calorie_mode, estimatedUnitGrams: x.estimated_unit_grams, manualUnitCost: x.manual_unit_cost, isHomemade: x.is_homemade, sourceRecipeId: x.source_recipe_id })),
         purchases: purchases.data.map((x) => ({ id: x.id, ingredientId: x.ingredient_id, date: x.purchased_at, store: x.store || '', quantity: x.quantity, unit: x.unit, price: x.price, createdAt: x.created_at })),
-        usages: usages.data.map((x) => normalizeUsage({ id: x.id, ingredientId: x.ingredient_id, date: x.used_at, quantity: x.quantity, unit: x.unit, daysUsed: x.days_used, usageMode: x.usage_mode, wasteIncluded: x.waste_included })),
+        usages: usages.data.map((x) => normalizeUsage({ id: x.id, ingredientId: x.ingredient_id, date: x.used_at, quantity: x.quantity, unit: x.unit, daysUsed: x.days_used, usageMode: x.usage_mode, wasteIncluded: x.waste_included, sourceRecipeLogId: x.source_recipe_log_id })),
         recipes: recipes.data.map((r) => ({
           id: r.id, name: r.name, servings: r.servings || 1, outputQty: Number(r.output_qty || 0), outputUnit: r.output_unit || '', createsIngredientId: r.creates_ingredient_id || null,
           items: recipeItems.data.filter((i) => i.recipe_id === r.id).map((i) => ({ id: i.id, ingredientId: i.ingredient_id, quantity: i.quantity, unit: i.unit }))
         })),
+        recipeLogs: recipeLogs.data.map((x) => ({ id: x.id, recipeId: x.recipe_id, date: x.planned_at, portions: Number(x.portions || 1), status: x.status || 'planned', createdAt: x.created_at })),
         weights: weights.data.map((x) => ({ id: x.id, date: x.measured_at, value: x.weight_kg, note: x.note || '' })),
       }
       const hasCloud = Object.values(cloud).some((arr) => arr.length > 0)
@@ -245,7 +250,7 @@ export default function App() {
   const persist = async (kind, row, action = 'insert') => {
     if (!cloudEnabled || !session?.user?.id) return true
     const user_id = session.user.id
-    const tableMap = { ingredient: 'life_ingredients', purchase: 'life_purchases', usage: 'life_usages', recipe: 'life_recipes', recipeItem: 'life_recipe_items', weight: 'life_weights' }
+    const tableMap = { ingredient: 'life_ingredients', purchase: 'life_purchases', usage: 'life_usages', recipe: 'life_recipes', recipeItem: 'life_recipe_items', recipeLog: 'life_recipe_logs', weight: 'life_weights' }
     const table = tableMap[kind]
     if (!table) return false
     setSyncState('저장 중')
@@ -456,31 +461,188 @@ function Purchases({ data, setData, persist, flash }) {
 }
 
 function Recipes({ data, setData, persist, flash }) {
-  const personalIngredients=data.ingredients.filter(i=>i.isPersonal)
-  const firstId=personalIngredients[0]?.id||''
-  const [name,setName]=useState(''); const [servings,setServings]=useState(1); const [items,setItems]=useState([{id:uid(),ingredientId:firstId,quantity:''}]); const [makeProduct,setMakeProduct]=useState(false); const [outputQty,setOutputQty]=useState(''); const [outputUnit,setOutputUnit]=useState('g')
-  const totals=recipeTotals({items},data.ingredients,data.purchases)
-  const addItem=()=>setItems([...items,{id:uid(),ingredientId:firstId,quantity:''}])
-  const save=async(e)=>{
-    e.preventDefault(); if(!name.trim()) return
-    const clean=items.filter(i=>i.ingredientId&&Number(i.quantity)).map(i=>{const ing=data.ingredients.find(x=>x.id===i.ingredientId);return {...i,quantity:Number(i.quantity),unit:ing?.unit||'g'}})
-    if(makeProduct&&(!Number(outputQty)||!outputUnit)) return flash('완제품의 완성량을 입력해 주세요')
-    const rid=uid(); let product=null
-    if(makeProduct){
-      const q=Number(outputQty); product=normalizeIngredient({id:uid(),name:name.trim(),unit:outputUnit,kcalBaseQty:outputUnit==='g'?100:1,kcalBaseValue:outputUnit==='g'?(totals.kcal/q*100):(totals.kcal/q),category:'직접 만든 음식',isPersonal:true,calorieMode:'exact',estimatedUnitGrams:0,manualUnitCost:totals.cost/q,isHomemade:true,sourceRecipeId:rid})
-    }
-    const recipe={id:rid,name:name.trim(),servings:Number(servings)||1,items:clean,outputQty:makeProduct?Number(outputQty):0,outputUnit:makeProduct?outputUnit:'',createsIngredientId:product?.id||null}
-    setData(d=>({...d,recipes:[...d.recipes,recipe],ingredients:product?[...d.ingredients,product]:d.ingredients}))
-    await persist('recipe',{id:rid,name:recipe.name,servings:recipe.servings,output_qty:recipe.outputQty,output_unit:recipe.outputUnit,creates_ingredient_id:recipe.createsIngredientId})
-    for(const item of clean) await persist('recipeItem',{id:item.id,recipe_id:rid,ingredient_id:item.ingredientId,quantity:item.quantity,unit:item.unit})
-    if(product) await persist('ingredient',{id:product.id,name:product.name,unit:product.unit,kcal_base_qty:product.kcalBaseQty,kcal_base_value:product.kcalBaseValue,category:product.category,is_personal:true,calorie_mode:'exact',estimated_unit_grams:0,manual_unit_cost:product.manualUnitCost,is_homemade:true,source_recipe_id:rid})
-    setName('');setItems([{id:uid(),ingredientId:firstId,quantity:''}]);setMakeProduct(false);setOutputQty('');setOutputUnit('g');flash(product?'레시피와 완제품을 저장했어요':'레시피를 저장했어요')
+  const personalIngredients = data.ingredients.filter((i) => i.isPersonal)
+  const firstId = personalIngredients[0]?.id || ''
+  const [editingId, setEditingId] = useState('')
+  const [name, setName] = useState('')
+  const [servings, setServings] = useState(1)
+  const [items, setItems] = useState([{ id: uid(), ingredientId: firstId, quantity: '' }])
+  const [makeProduct, setMakeProduct] = useState(false)
+  const [outputQty, setOutputQty] = useState('')
+  const [outputUnit, setOutputUnit] = useState('g')
+  const [run, setRun] = useState({ recipeId: data.recipes[0]?.id || '', date: today(), portions: 1 })
+  const totals = recipeTotals({ items }, data.ingredients, data.purchases)
+
+
+  const resetRecipe = () => {
+    setEditingId('')
+    setName('')
+    setServings(1)
+    setItems([{ id: uid(), ingredientId: firstId, quantity: '' }])
+    setMakeProduct(false)
+    setOutputQty('')
+    setOutputUnit('g')
   }
-  return <div className="pageStack"><section className="panel recipeBuilder"><div className="sectionHead"><div><p className="kicker">RECIPE</p><h2>내 음식 원가 · 칼로리</h2></div><div className="liveTotals"><span>{money(totals.cost)}</span><b>{number(totals.kcal,0)} kcal</b></div></div><p className="muted manageHint">식재료의 최신 단가와 kcal 기준으로 자동 계산해요. 직접 만든 페스토 같은 건 완제품으로 저장할 수 있어요.</p>
-    {personalIngredients.length?<form onSubmit={save}><div className="formGrid twoCols"><label>레시피 이름<input value={name} onChange={(e)=>setName(e.target.value)} placeholder="예: 깻잎 페스토"/></label><label>몇 인분<input type="number" min="1" value={servings} onChange={(e)=>setServings(e.target.value)}/></label></div><div className="recipeItems">{items.map(item=><div className="recipeItem" key={item.id}><select value={item.ingredientId} onChange={(e)=>setItems(items.map(x=>x.id===item.id?{...x,ingredientId:e.target.value}:x))}>{personalIngredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select><input type="number" step="0.1" value={item.quantity} onChange={(e)=>setItems(items.map(x=>x.id===item.id?{...x,quantity:e.target.value}:x))} placeholder="사용량"/><span>{data.ingredients.find(i=>i.id===item.ingredientId)?.unit}</span><button type="button" className="miniDelete" onClick={()=>setItems(items.filter(x=>x.id!==item.id))}>×</button></div>)}</div>
-      <div className="productBox"><label className="checkLabel"><input type="checkbox" checked={makeProduct} onChange={(e)=>setMakeProduct(e.target.checked)}/><span>이 레시피를 완제품 식재료로도 저장</span></label>{makeProduct&&<div className="productFields"><label>완성량<input type="number" step="0.1" value={outputQty} onChange={(e)=>setOutputQty(e.target.value)} placeholder="예: 250"/></label><label>단위<select value={outputUnit} onChange={(e)=>setOutputUnit(e.target.value)}>{['g','ml','개','장','팩','봉'].map(u=><option key={u}>{u}</option>)}</select></label><p>{Number(outputQty)>0?`완제품 ${outputUnit}당 원가 ${money(totals.cost/Number(outputQty))} · ${outputUnit==='g'?`100g당 ${number(totals.kcal/Number(outputQty)*100,0)} kcal`:`${outputUnit}당 ${number(totals.kcal/Number(outputQty),0)} kcal`}`:'완성된 총 무게나 개수를 넣으면 단가와 kcal를 자동 환산해요.'}</p></div>}</div>
-      <div className="formActions"><button className="secondaryButton" type="button" onClick={addItem}>재료 추가</button><button className="primaryButton" type="submit">레시피 저장</button></div></form>:<Empty text="구매 기록에서 ‘내 식단’ 재료를 먼저 추가해 주세요."/>}
-  </section><section className="panel"><div className="sectionHead"><div><p className="kicker">MY RECIPES</p><h2>저장된 레시피</h2></div></div>{data.recipes.length?<div className="recipeGrid">{data.recipes.map(r=>{const t=recipeTotals(r,data.ingredients,data.purchases);return <article className="recipeCard" key={r.id}><div><span>{r.servings}인분 {r.createsIngredientId?'· 완제품 저장':''}</span><h3>{r.name}</h3></div><div className="recipeNumbers"><strong>{money(t.cost)}</strong><b>{number(t.kcal,0)} kcal</b></div><p>1인분 약 {money(t.cost/Math.max(1,r.servings))} · {number(t.kcal/Math.max(1,r.servings),0)} kcal{r.outputQty?` · 완성 ${number(r.outputQty,1)}${r.outputUnit}`:''}</p></article>})}</div>:<Empty text="첫 레시피를 만들어 보세요."/>}</section></div>
+
+  const addItem = () => setItems([...items, { id: uid(), ingredientId: firstId, quantity: '' }])
+
+  const editRecipe = (recipe) => {
+    setEditingId(recipe.id)
+    setName(recipe.name)
+    setServings(recipe.servings || 1)
+    setItems((recipe.items || []).map((x) => ({ ...x })) || [{ id: uid(), ingredientId: firstId, quantity: '' }])
+    setMakeProduct(Boolean(recipe.createsIngredientId || recipe.outputQty))
+    setOutputQty(recipe.outputQty || '')
+    setOutputUnit(recipe.outputUnit || 'g')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const save = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    const clean = items.filter((i) => i.ingredientId && Number(i.quantity)).map((i) => {
+      const ing = data.ingredients.find((x) => x.id === i.ingredientId)
+      return { ...i, quantity: Number(i.quantity), unit: ing?.unit || 'g' }
+    })
+    if (!clean.length) return flash('레시피 재료를 하나 이상 넣어 주세요')
+    if (makeProduct && (!Number(outputQty) || !outputUnit)) return flash('완제품의 완성량을 입력해 주세요')
+
+    const existing = editingId ? data.recipes.find((r) => r.id === editingId) : null
+    const rid = existing?.id || uid()
+    let product = existing?.createsIngredientId ? data.ingredients.find((i) => i.id === existing.createsIngredientId) : null
+    const productId = makeProduct ? (product?.id || uid()) : null
+    if (makeProduct) {
+      const q = Number(outputQty)
+      product = normalizeIngredient({
+        id: productId,
+        name: name.trim(),
+        unit: outputUnit,
+        kcalBaseQty: outputUnit === 'g' ? 100 : 1,
+        kcalBaseValue: outputUnit === 'g' ? (totals.kcal / q * 100) : (totals.kcal / q),
+        category: '직접 만든 음식',
+        isPersonal: true,
+        calorieMode: 'exact',
+        estimatedUnitGrams: 0,
+        manualUnitCost: totals.cost / q,
+        isHomemade: true,
+        sourceRecipeId: rid,
+      })
+    }
+
+    const recipe = {
+      id: rid,
+      name: name.trim(),
+      servings: Number(servings) || 1,
+      items: clean,
+      outputQty: makeProduct ? Number(outputQty) : 0,
+      outputUnit: makeProduct ? outputUnit : '',
+      createsIngredientId: productId,
+    }
+
+    if (existing) {
+      const oldIds = new Set((existing.items || []).map((x) => x.id))
+      const newIds = new Set(clean.map((x) => x.id))
+      for (const oldId of oldIds) if (!newIds.has(oldId)) await persist('recipeItem', { id: oldId }, 'delete')
+      setData((d) => ({
+        ...d,
+        recipes: d.recipes.map((r) => r.id === rid ? recipe : r),
+        ingredients: product ? (d.ingredients.some((i) => i.id === product.id) ? d.ingredients.map((i) => i.id === product.id ? product : i) : [...d.ingredients, product]) : d.ingredients,
+      }))
+    } else {
+      setData((d) => ({ ...d, recipes: [...d.recipes, recipe], ingredients: product ? [...d.ingredients, product] : d.ingredients }))
+    }
+
+    await persist('recipe', { id: rid, name: recipe.name, servings: recipe.servings, output_qty: recipe.outputQty, output_unit: recipe.outputUnit, creates_ingredient_id: recipe.createsIngredientId })
+    for (const item of clean) await persist('recipeItem', { id: item.id, recipe_id: rid, ingredient_id: item.ingredientId, quantity: item.quantity, unit: item.unit })
+    if (product) await persist('ingredient', { id: product.id, name: product.name, unit: product.unit, kcal_base_qty: product.kcalBaseQty, kcal_base_value: product.kcalBaseValue, category: product.category, is_personal: true, calorie_mode: 'exact', estimated_unit_grams: 0, manual_unit_cost: product.manualUnitCost, is_homemade: true, source_recipe_id: rid })
+
+    flash(existing ? '레시피를 수정했어요' : (product ? '레시피와 완제품을 저장했어요' : '레시피를 저장했어요'))
+    resetRecipe()
+  }
+
+  const removeRecipe = async (recipe) => {
+    const relatedLogs = data.recipeLogs.filter((x) => x.recipeId === recipe.id)
+    if (relatedLogs.some((x) => x.status === 'completed')) return flash('먹은 기록이 있는 레시피는 삭제하지 않고 수정해 주세요')
+    for (const log of relatedLogs) await persist('recipeLog', { id: log.id }, 'delete')
+    for (const item of recipe.items || []) await persist('recipeItem', { id: item.id }, 'delete')
+    await persist('recipe', { id: recipe.id }, 'delete')
+    setData((d) => ({ ...d, recipes: d.recipes.filter((r) => r.id !== recipe.id), recipeLogs: d.recipeLogs.filter((x) => x.recipeId !== recipe.id) }))
+    if (editingId === recipe.id) resetRecipe()
+    flash('레시피를 삭제했어요')
+  }
+
+  const createRecipeUsages = async (log, recipe) => {
+    const factor = Number(log.portions || 1) / Math.max(1, Number(recipe.servings || 1))
+    const rows = (recipe.items || []).map((item) => {
+      const ing = data.ingredients.find((i) => i.id === item.ingredientId)
+      return normalizeUsage({ id: uid(), ingredientId: item.ingredientId, date: log.date, quantity: Number(item.quantity || 0) * factor, unit: ing?.unit || item.unit || 'g', daysUsed: 1, usageMode: 'direct', wasteIncluded: false, sourceRecipeLogId: log.id })
+    }).filter((x) => Number(x.quantity) > 0)
+    for (const row of rows) {
+      await persist('usage', { id: row.id, ingredient_id: row.ingredientId, used_at: row.date, quantity: row.quantity, unit: row.unit, days_used: 1, usage_mode: 'direct', waste_included: false, source_recipe_log_id: log.id })
+    }
+    setData((d) => ({ ...d, usages: [...rows, ...d.usages] }))
+  }
+
+  const saveRun = async (e) => {
+    e.preventDefault()
+    const selectedRecipeId = run.recipeId || data.recipes[0]?.id || ''
+    const recipe = data.recipes.find((r) => r.id === selectedRecipeId)
+    if (!recipe || !Number(run.portions)) return
+    const status = run.date > today() ? 'planned' : 'completed'
+    const log = { id: uid(), recipeId: recipe.id, date: run.date, portions: Number(run.portions), status, createdAt: new Date().toISOString() }
+    setData((d) => ({ ...d, recipeLogs: [log, ...d.recipeLogs] }))
+    await persist('recipeLog', { id: log.id, recipe_id: log.recipeId, planned_at: log.date, portions: log.portions, status: log.status })
+    if (status === 'completed') await createRecipeUsages(log, recipe)
+    flash(status === 'planned' ? '식단 예정으로 저장했어요' : '먹은 기록과 재료 소진을 반영했어요')
+    setRun((r) => ({ ...r, portions: 1 }))
+  }
+
+  const completeRun = async (log) => {
+    const recipe = data.recipes.find((r) => r.id === log.recipeId)
+    if (!recipe || log.status === 'completed') return
+    const completed = { ...log, status: 'completed' }
+    setData((d) => ({ ...d, recipeLogs: d.recipeLogs.map((x) => x.id === log.id ? completed : x) }))
+    await persist('recipeLog', { id: log.id, recipe_id: log.recipeId, planned_at: log.date, portions: log.portions, status: 'completed' })
+    await createRecipeUsages(completed, recipe)
+    flash('예정을 완료 처리하고 재료 소진을 반영했어요')
+  }
+
+  const removeRun = async (log) => {
+    const generated = data.usages.filter((u) => u.sourceRecipeLogId === log.id)
+    for (const usage of generated) await persist('usage', { id: usage.id }, 'delete')
+    await persist('recipeLog', { id: log.id }, 'delete')
+    setData((d) => ({ ...d, recipeLogs: d.recipeLogs.filter((x) => x.id !== log.id), usages: d.usages.filter((u) => u.sourceRecipeLogId !== log.id) }))
+    flash(log.status === 'completed' ? '먹은 기록과 자동 소진 기록을 삭제했어요' : '예정 기록을 삭제했어요')
+  }
+
+  const sortedLogs = [...data.recipeLogs].sort((a, b) => `${b.date}${b.createdAt || ''}`.localeCompare(`${a.date}${a.createdAt || ''}`))
+
+  return <div className="pageStack">
+    <section className="panel recipeBuilder">
+      <div className="sectionHead"><div><p className="kicker">RECIPE</p><h2>{editingId ? '레시피 수정' : '내 음식 원가 · 칼로리'}</h2></div><div className="liveTotals"><span>{money(totals.cost)}</span><b>{number(totals.kcal, 0)} kcal</b></div></div>
+      <p className="muted manageHint">레시피를 수정해도 원가와 칼로리가 다시 계산돼요. 완제품 정보도 함께 갱신할 수 있어요.</p>
+      {personalIngredients.length ? <form onSubmit={save}>
+        <div className="formGrid twoCols"><label>레시피 이름<input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 깻잎 페스토" /></label><label>총 몇 인분<input type="number" min="1" step="0.5" value={servings} onChange={(e) => setServings(e.target.value)} /></label></div>
+        <div className="recipeItems">{items.map((item) => <div className="recipeItem" key={item.id}><select value={item.ingredientId} onChange={(e) => setItems(items.map((x) => x.id === item.id ? { ...x, ingredientId: e.target.value } : x))}>{personalIngredients.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</select><input type="number" step="0.1" value={item.quantity} onChange={(e) => setItems(items.map((x) => x.id === item.id ? { ...x, quantity: e.target.value } : x))} placeholder="사용량" /><span>{data.ingredients.find((i) => i.id === item.ingredientId)?.unit}</span><button type="button" className="miniDelete" onClick={() => setItems(items.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
+        <div className="productBox"><label className="checkLabel"><input type="checkbox" checked={makeProduct} onChange={(e) => setMakeProduct(e.target.checked)} /><span>이 레시피를 완제품 식재료로도 저장</span></label>{makeProduct && <div className="productFields"><label>완성량<input type="number" step="0.1" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} placeholder="예: 250" /></label><label>단위<select value={outputUnit} onChange={(e) => setOutputUnit(e.target.value)}>{['g', 'ml', '개', '장', '팩', '봉'].map((u) => <option key={u}>{u}</option>)}</select></label><p>{Number(outputQty) > 0 ? `완제품 ${outputUnit}당 원가 ${money(totals.cost / Number(outputQty))} · ${outputUnit === 'g' ? `100g당 ${number(totals.kcal / Number(outputQty) * 100, 0)} kcal` : `${outputUnit}당 ${number(totals.kcal / Number(outputQty), 0)} kcal`}` : '완성된 총 무게나 개수를 넣으면 단가와 kcal를 자동 환산해요.'}</p></div>}</div>
+        <div className="formActions"><button className="secondaryButton" type="button" onClick={addItem}>재료 추가</button><button className="primaryButton" type="submit">{editingId ? '수정 저장' : '레시피 저장'}</button>{editingId && <button className="secondaryButton" type="button" onClick={resetRecipe}>취소</button>}</div>
+      </form> : <Empty text="구매 기록에서 ‘내 식단’ 재료를 먼저 추가해 주세요." />}
+    </section>
+
+    <section className="panel accentPanel">
+      <div><p className="kicker">EAT / PLAN</p><h2>레시피 먹기 · 미리 저장</h2><p className="muted">오늘이나 과거 날짜는 저장 즉시 재료 사용량에 반영돼요. 미래 날짜는 예정으로만 저장되고, 완료할 때 소진돼요.</p></div>
+      {data.recipes.length ? <form className="formGrid purchaseFirst" onSubmit={saveRun}>
+        <label>레시피<select value={run.recipeId || data.recipes[0]?.id || ''} onChange={(e) => setRun({ ...run, recipeId: e.target.value })}>{data.recipes.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+        <label>날짜<input type="date" value={run.date} onChange={(e) => setRun({ ...run, date: e.target.value })} /></label>
+        <label>먹을 양 / 인분<input type="number" min="0.25" step="0.25" value={run.portions} onChange={(e) => setRun({ ...run, portions: e.target.value })} /></label>
+        <button className="primaryButton" type="submit">{run.date > today() ? '예정 저장' : '먹은 기록 저장'}</button>
+      </form> : <Empty text="레시피를 먼저 만들어 주세요." />}
+    </section>
+
+    <section className="panel"><div className="sectionHead"><div><p className="kicker">MY RECIPES</p><h2>저장된 레시피</h2></div></div>{data.recipes.length ? <div className="recipeGrid">{data.recipes.map((r) => { const t = recipeTotals(r, data.ingredients, data.purchases); return <article className="recipeCard" key={r.id}><div><span>{r.servings}인분 {r.createsIngredientId ? '· 완제품 저장' : ''}</span><h3>{r.name}</h3></div><div className="recipeNumbers"><strong>{money(t.cost)}</strong><b>{number(t.kcal, 0)} kcal</b></div><p>1인분 약 {money(t.cost / Math.max(1, r.servings))} · {number(t.kcal / Math.max(1, r.servings), 0)} kcal{r.outputQty ? ` · 완성 ${number(r.outputQty, 1)}${r.outputUnit}` : ''}</p><div className="rowActions"><button className="smallButton" onClick={() => editRecipe(r)}>수정</button><button className="smallButton danger" onClick={() => removeRecipe(r)}>삭제</button></div></article> })}</div> : <Empty text="첫 레시피를 만들어 보세요." />}</section>
+
+    <section className="panel"><div className="sectionHead"><div><p className="kicker">MEAL LOG</p><h2>레시피 사용 기록</h2></div><span className="countPill">{sortedLogs.length}건</span></div>{sortedLogs.length ? <div className="usageList">{sortedLogs.map((log) => { const recipe = data.recipes.find((r) => r.id === log.recipeId); return <article className="usageRow" key={log.id}><div><strong>{recipe?.name || '삭제된 레시피'}</strong><span>{log.date} · {number(log.portions, 2)}인분 · {log.status === 'planned' ? '예정' : '완료 · 재료 소진 반영'}</span></div><div className="rowActions">{log.status === 'planned' && <button className="smallButton" onClick={() => completeRun(log)}>완료</button>}<button className="smallButton danger" onClick={() => removeRun(log)}>삭제</button></div></article> })}</div> : <Empty text="레시피를 먹거나 예정으로 저장하면 여기에 보여요." />}</section>
+  </div>
 }
 
 function Weight({ data, setData, persist, flash }) {
